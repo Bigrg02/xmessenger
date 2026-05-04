@@ -171,34 +171,17 @@
 
       <!-- Model -->
       <div class="form-section-label">AI MODEL</div>
-      <div class="form-group">
+      <div class="form-group model-picker-group">
         <label class="form-label">OpenRouter Model</label>
-        <select id="form-model" class="form-select">
-          <optgroup label="OpenAI">
-            <option value="openai/gpt-4o">GPT-4o (recommended)</option>
-            <option value="openai/gpt-4o-mini">GPT-4o Mini (fast)</option>
-            <option value="openai/gpt-4-turbo">GPT-4 Turbo</option>
-          </optgroup>
-          <optgroup label="Anthropic">
-            <option value="anthropic/claude-opus-4-7">Claude Opus 4.7</option>
-            <option value="anthropic/claude-sonnet-4-5">Claude Sonnet 4.5</option>
-            <option value="anthropic/claude-haiku-4-5">Claude Haiku 4.5 (fast)</option>
-          </optgroup>
-          <optgroup label="Google">
-            <option value="google/gemini-2.0-flash-001">Gemini 2.0 Flash (fast)</option>
-            <option value="google/gemini-2.5-pro-preview">Gemini 2.5 Pro</option>
-          </optgroup>
-          <optgroup label="Meta">
-            <option value="meta-llama/llama-3.3-70b-instruct">Llama 3.3 70B</option>
-            <option value="meta-llama/llama-3.1-405b-instruct">Llama 3.1 405B</option>
-          </optgroup>
-          <optgroup label="Other">
-            <option value="mistralai/mistral-large">Mistral Large</option>
-            <option value="nousresearch/hermes-3-llama-3.1-405b">Hermes 3 405B</option>
-            <option value="custom">Custom model ID...</option>
-          </optgroup>
-        </select>
-        <input type="text" id="form-model-custom" class="form-input hidden" placeholder="e.g. openai/gpt-4o" style="margin-top:8px">
+        <div class="model-picker-wrap">
+          <input type="text" id="model-search" class="form-input model-search-input"
+                 placeholder="Search models…" autocomplete="off" spellcheck="false">
+          <div class="model-dropdown" id="model-dropdown">
+            <div class="model-status" id="model-status">Loading models…</div>
+            <div class="model-list" id="model-list"></div>
+          </div>
+        </div>
+        <input type="hidden" id="form-model" value="openai/gpt-4o">
       </div>
 
       <!-- Personality -->

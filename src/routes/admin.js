@@ -3,6 +3,41 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const axios = require('axios');
+
+// Cache model list for 5 minutes
+let modelsCache = null;
+let modelsCacheAt = 0;
+
+// GET /api/admin/models — live OpenRouter model list with pricing
+router.get('/models', async (req, res) => {
+  try {
+    if (modelsCache && Date.now() - modelsCacheAt < 5 * 60 * 1000) {
+      return res.json(modelsCache);
+    }
+    const response = await axios.get('https://openrouter.ai/api/v1/models', {
+      headers: { Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}` },
+      timeout: 10000,
+    });
+    const models = (response.data.data || [])
+      .map(m => ({
+        id: m.id,
+        name: m.name || m.id,
+        context_length: m.context_length,
+        pricing: {
+          prompt: m.pricing?.prompt ?? null,
+          completion: m.pricing?.completion ?? null,
+        },
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    modelsCache = models;
+    modelsCacheAt = Date.now();
+    res.json(models);
+  } catch (err) {
+    console.error('[admin] models fetch failed:', err.message);
+    res.status(502).json({ error: 'Failed to fetch models from OpenRouter' });
+  }
+});
 
 const CHARS_DIR = path.join(__dirname, '../../characters');
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });

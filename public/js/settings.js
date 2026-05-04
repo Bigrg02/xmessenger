@@ -6,7 +6,7 @@ const Settings = (() => {
   const screenForm     = document.getElementById('screen-char-form');
 
   let editingSlug = null;
-  let loadToken = 0; // cancel stale loadFormData responses
+  let loadToken = 0;
 
   // ── Navigation ──────────────────────────────────────────────
 
@@ -24,7 +24,7 @@ const Settings = (() => {
 
   function openForm(slug = null) {
     editingSlug = slug;
-    loadToken++; // invalidate any in-flight loadFormData
+    loadToken++;
     screenSettings.classList.add('slide-out');
     screenForm.classList.add('active');
     document.getElementById('char-form').scrollTo(0, 0);
@@ -84,6 +84,133 @@ const Settings = (() => {
     }
   }
 
+  // ── Model Picker ─────────────────────────────────────────────
+
+  let allModels = null; // session cache
+
+  async function fetchModels() {
+    if (allModels) return allModels;
+    const res = await fetch('/api/admin/models');
+    if (!res.ok) throw new Error('Failed to load models');
+    allModels = await res.json();
+    return allModels;
+  }
+
+  function formatPricePer1M(perToken) {
+    const n = parseFloat(perToken);
+    if (!n) return null;
+    const pm = n * 1_000_000;
+    if (pm < 0.001) return '<$0.01';
+    if (pm < 10)  return `$${pm.toFixed(2)}`;
+    return `$${pm.toFixed(1)}`;
+  }
+
+  function buildPriceHtml(pricing) {
+    const inP  = formatPricePer1M(pricing?.prompt);
+    const outP = formatPricePer1M(pricing?.completion);
+    if (!inP && !outP) return '<span class="price-free">free</span>';
+    return `<span class="price-in">${inP ?? '?'}</span> in<br><span class="price-out">${outP ?? '?'}</span> out`;
+  }
+
+  function renderModelList(models, filter, selectedId) {
+    const list = document.getElementById('model-list');
+    const status = document.getElementById('model-status');
+    list.innerHTML = '';
+
+    const q = (filter || '').toLowerCase().trim();
+    const filtered = q
+      ? models.filter(m =>
+          m.name.toLowerCase().includes(q) ||
+          m.id.toLowerCase().includes(q)
+        )
+      : models;
+
+    if (!filtered.length) {
+      status.textContent = 'No models match';
+      status.classList.remove('hidden');
+      return;
+    }
+    status.classList.add('hidden');
+
+    const visible = filtered.slice(0, 120);
+    for (const m of visible) {
+      const div = document.createElement('div');
+      div.className = 'model-item' + (m.id === selectedId ? ' selected' : '');
+      div.dataset.id = m.id;
+      div.innerHTML = `
+        <div class="model-item-body">
+          <span class="model-item-name">${m.name}</span>
+          <span class="model-item-id">${m.id}</span>
+        </div>
+        <div class="model-item-price">${buildPriceHtml(m.pricing)}</div>
+      `;
+      div.addEventListener('mousedown', e => {
+        e.preventDefault(); // keep input focused so blur doesn't fire first
+        selectModel(m.id, m.name);
+      });
+      div.addEventListener('touchstart', e => {
+        e.preventDefault();
+        selectModel(m.id, m.name);
+      }, { passive: false });
+      list.appendChild(div);
+    }
+
+    if (filtered.length > 120) {
+      const more = document.createElement('div');
+      more.className = 'model-status';
+      more.style.display = 'block';
+      more.textContent = `${filtered.length - 120} more — keep typing to filter`;
+      list.appendChild(more);
+    }
+  }
+
+  function selectModel(id, name) {
+    document.getElementById('form-model').value = id;
+    document.getElementById('model-search').value = name || id;
+    closeModelDropdown();
+  }
+
+  function openModelDropdown() {
+    const dd = document.getElementById('model-dropdown');
+    dd.classList.add('open');
+    const status = document.getElementById('model-status');
+    const selectedId = document.getElementById('form-model').value;
+
+    if (allModels) {
+      renderModelList(allModels, document.getElementById('model-search').value, selectedId);
+    } else {
+      status.textContent = 'Loading models…';
+      status.classList.remove('hidden');
+      document.getElementById('model-list').innerHTML = '';
+      fetchModels()
+        .then(models => renderModelList(models, document.getElementById('model-search').value, selectedId))
+        .catch(err => {
+          status.textContent = `Error: ${err.message}`;
+        });
+    }
+  }
+
+  function closeModelDropdown() {
+    document.getElementById('model-dropdown').classList.remove('open');
+  }
+
+  function setModelValue(modelId) {
+    document.getElementById('form-model').value = modelId || '';
+    const model = allModels?.find(m => m.id === modelId);
+    document.getElementById('model-search').value = model ? model.name : (modelId || '');
+  }
+
+  function initModelPicker() {
+    const searchInput = document.getElementById('model-search');
+
+    searchInput.addEventListener('focus', openModelDropdown);
+    searchInput.addEventListener('blur', () => setTimeout(closeModelDropdown, 200));
+    searchInput.addEventListener('input', () => {
+      const selectedId = document.getElementById('form-model').value;
+      if (allModels) renderModelList(allModels, searchInput.value, selectedId);
+    });
+  }
+
   // ── Form helpers ─────────────────────────────────────────────
 
   function resetForm() {
@@ -95,9 +222,7 @@ const Settings = (() => {
     document.getElementById('form-scenario').value = '';
     document.getElementById('form-first-message').value = '';
     document.getElementById('form-appearance').value = '';
-    document.getElementById('form-model').value = 'openai/gpt-4o';
-    document.getElementById('form-model-custom').classList.add('hidden');
-    document.getElementById('form-model-custom').value = '';
+    setModelValue('openai/gpt-4o');
     clearPhotoSlot('portrait');
     clearPhotoSlot('fullbody');
     syncSwatches('#ff6b9d');
@@ -110,7 +235,7 @@ const Settings = (() => {
 
     try {
       const res = await fetch(`/api/admin/characters/${slug}`);
-      if (token !== loadToken) return; // navigated away, discard
+      if (token !== loadToken) return;
       if (!res.ok) throw new Error('Character not found');
       const c = await res.json();
 
@@ -123,26 +248,12 @@ const Settings = (() => {
       document.getElementById('form-first-message').value = c.first_message || '';
       document.getElementById('form-appearance').value = c.appearance_prompt || '';
 
-      const modelSel = document.getElementById('form-model');
-      const knownModels = Array.from(modelSel.options).map(o => o.value);
-      if (c.model && knownModels.includes(c.model)) {
-        modelSel.value = c.model;
-      } else if (c.model) {
-        modelSel.value = 'custom';
-        document.getElementById('form-model-custom').value = c.model;
-        document.getElementById('form-model-custom').classList.remove('hidden');
-      }
-
+      setModelValue(c.model || 'openai/gpt-4o');
       syncSwatches(c.accent_color || '#ff6b9d');
 
-      // Load existing photos (fallback to avatar for pre-admin cards)
       const portrait = c.reference_portrait || c.avatar;
-      if (portrait) {
-        showPhotoPreview('portrait', `/characters/${slug}/${portrait}`);
-      }
-      if (c.reference_fullbody) {
-        showPhotoPreview('fullbody', `/characters/${slug}/${c.reference_fullbody}`);
-      }
+      if (portrait) showPhotoPreview('portrait', `/characters/${slug}/${portrait}`);
+      if (c.reference_fullbody) showPhotoPreview('fullbody', `/characters/${slug}/${c.reference_fullbody}`);
     } catch (err) {
       console.error('[settings] loadFormData error:', err);
     } finally {
@@ -151,9 +262,9 @@ const Settings = (() => {
   }
 
   function clearPhotoSlot(type) {
-    const preview = document.getElementById(`preview-${type}`);
+    const preview     = document.getElementById(`preview-${type}`);
     const placeholder = document.getElementById(`placeholder-${type}`);
-    const slot = document.getElementById(`slot-${type}`);
+    const slot        = document.getElementById(`slot-${type}`);
     preview.src = '';
     preview.classList.add('hidden');
     placeholder.classList.remove('hidden');
@@ -162,9 +273,9 @@ const Settings = (() => {
   }
 
   function showPhotoPreview(type, src) {
-    const preview = document.getElementById(`preview-${type}`);
+    const preview     = document.getElementById(`preview-${type}`);
     const placeholder = document.getElementById(`placeholder-${type}`);
-    const slot = document.getElementById(`slot-${type}`);
+    const slot        = document.getElementById(`slot-${type}`);
     preview.src = src;
     preview.classList.remove('hidden');
     placeholder.classList.add('hidden');
@@ -181,19 +292,10 @@ const Settings = (() => {
 
   async function saveForm() {
     const name = document.getElementById('form-name').value.trim();
-    if (!name) {
-      alert('Please enter a character name.');
-      return;
-    }
+    if (!name) { alert('Please enter a character name.'); return; }
 
-    let model = document.getElementById('form-model').value;
-    if (model === 'custom') {
-      model = document.getElementById('form-model-custom').value.trim();
-      if (!model) {
-        alert('Please enter a custom model ID.');
-        return;
-      }
-    }
+    const model = document.getElementById('form-model').value.trim();
+    if (!model) { alert('Please select a model.'); return; }
 
     const overlay = document.getElementById('form-saving');
     overlay.classList.remove('hidden');
@@ -214,13 +316,11 @@ const Settings = (() => {
       if (portraitFile) fd.append('portrait', portraitFile);
       if (fullbodyFile) fd.append('fullbody', fullbodyFile);
 
-      const slug = editingSlug;
-      const url  = slug ? `/api/admin/characters/${slug}` : '/api/admin/characters';
-      const method = slug ? 'PATCH' : 'POST';
+      const url    = editingSlug ? `/api/admin/characters/${editingSlug}` : '/api/admin/characters';
+      const method = editingSlug ? 'PATCH' : 'POST';
 
-      const res = await fetch(url, { method, body: fd });
+      const res  = await fetch(url, { method, body: fd });
       const data = await res.json();
-
       if (!res.ok) throw new Error(data.error || 'Save failed');
 
       closeForm();
@@ -235,8 +335,7 @@ const Settings = (() => {
   // ── Delete ────────────────────────────────────────────────────
 
   async function deleteCharacter() {
-    const slug = editingSlug;
-    if (!slug) return;
+    if (!editingSlug) return;
     if (!confirm('Delete this character? All conversation history will also be lost.')) return;
 
     const overlay = document.getElementById('form-saving');
@@ -244,7 +343,7 @@ const Settings = (() => {
     document.querySelector('#form-saving .saving-label').textContent = 'Deleting…';
 
     try {
-      const res = await fetch(`/api/admin/characters/${slug}`, { method: 'DELETE' });
+      const res = await fetch(`/api/admin/characters/${editingSlug}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Delete failed');
       closeForm();
       App.refreshCharacterList();
@@ -266,18 +365,17 @@ const Settings = (() => {
     document.getElementById('btn-form-save').addEventListener('click', saveForm);
     document.getElementById('btn-delete-char').addEventListener('click', deleteCharacter);
 
-    // Photo slot clicks
+    initModelPicker();
+
     ['portrait', 'fullbody'].forEach(type => {
       const input = document.getElementById(`input-${type}`);
       input.addEventListener('change', () => {
         const file = input.files[0];
         if (!file) return;
-        const url = URL.createObjectURL(file);
-        showPhotoPreview(type, url);
+        showPhotoPreview(type, URL.createObjectURL(file));
       });
     });
 
-    // Color swatches
     document.querySelectorAll('.color-swatch').forEach(sw => {
       sw.addEventListener('click', () => {
         document.getElementById('form-accent').value = sw.dataset.color;
@@ -285,21 +383,7 @@ const Settings = (() => {
       });
     });
 
-    // Sync swatch highlight when color picker changes directly
-    document.getElementById('form-accent').addEventListener('input', e => {
-      syncSwatches(e.target.value);
-    });
-
-    // Model dropdown → show/hide custom input
-    document.getElementById('form-model').addEventListener('change', e => {
-      const customInput = document.getElementById('form-model-custom');
-      if (e.target.value === 'custom') {
-        customInput.classList.remove('hidden');
-        customInput.focus();
-      } else {
-        customInput.classList.add('hidden');
-      }
-    });
+    document.getElementById('form-accent').addEventListener('input', e => syncSwatches(e.target.value));
   }
 
   return { init };

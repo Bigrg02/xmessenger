@@ -863,6 +863,93 @@ html, body {
 .photo-placeholder span { font-size: 14px; font-weight: 600; }
 .photo-placeholder .photo-hint { font-size: 11px; opacity: 0.7; }
 
+/* ===== MODEL PICKER ===== */
+.model-picker-group { overflow: visible; }
+
+.model-picker-wrap {
+  position: relative;
+}
+
+.model-search-input {
+  width: 100%;
+  cursor: text;
+}
+
+.model-dropdown {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 200;
+  background: var(--bg);
+  border: 1px solid var(--separator);
+  border-radius: 12px;
+  max-height: 320px;
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.35);
+  -webkit-overflow-scrolling: touch;
+}
+.model-dropdown.open { display: block; }
+
+.model-status {
+  padding: 14px 16px;
+  font-size: 14px;
+  color: var(--label-secondary);
+  text-align: center;
+}
+.model-status.hidden { display: none; }
+
+.model-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 0.5px solid var(--separator);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.model-item:last-child { border-bottom: none; }
+.model-item:active { background: var(--bg-secondary); }
+.model-item.selected { background: rgba(0,122,255,0.12); }
+
+.model-item-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.model-item-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--label);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+
+.model-item-id {
+  font-size: 11px;
+  color: var(--label-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+  margin-top: 1px;
+}
+
+.model-item-price {
+  flex-shrink: 0;
+  text-align: right;
+  font-size: 11px;
+  color: var(--label-secondary);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+}
+.model-item-price .price-in  { color: #34c759; }
+.model-item-price .price-out { color: #ff9500; }
+.model-item-price .price-free { color: var(--label-secondary); }
+
 /* ===== DELETE BUTTON ===== */
 .delete-btn {
   display: block;
