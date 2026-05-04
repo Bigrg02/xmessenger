@@ -36,16 +36,19 @@ router.get('/', (req, res) => {
   const chars = listCharacters();
 
   // Attach last message preview from sessions
+  // Key by lowercase so slug-stored ("sara") and name-stored ("Sara") both match
   const sessions = db.listSessions();
-  const sessionByChar = {};
+  const sessionByKey = {};
   for (const s of sessions) {
-    if (!sessionByChar[s.character_name]) sessionByChar[s.character_name] = s;
+    const k = s.character_name.toLowerCase();
+    if (!sessionByKey[k]) sessionByKey[k] = s;
   }
 
   const result = chars.map(c => {
-    const session = sessionByChar[c.name];
+    const session = sessionByKey[c._dir] || sessionByKey[c.name.toLowerCase()];
     return {
       name: c.name,
+      slug: c._dir,
       avatar: `/characters/${c._dir}/${c.avatar || 'reference.png'}`,
       accent_color: c.accent_color || '#007AFF',
       last_message: session?.last_message || c.first_message || null,

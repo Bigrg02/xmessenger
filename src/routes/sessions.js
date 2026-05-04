@@ -9,13 +9,14 @@ router.post('/', (req, res) => {
   const { character_name, resume } = req.body;
   if (!character_name) return res.status(400).json({ error: 'character_name required' });
 
-  const card = loadCard(character_name.toLowerCase());
+  const slug = character_name.toLowerCase();
+  const card = loadCard(slug);
   if (!card) return res.status(404).json({ error: 'Character not found' });
 
   if (resume) {
-    const existing = db.getOrCreateSession(card.name);
+    // Look up existing session by slug first, fall back to display name
+    const existing = db.getOrCreateSession(slug);
     let messages = db.getMessages(existing.id);
-    // New session created by getOrCreateSession won't have the first_message yet
     if (messages.length === 0 && card.first_message) {
       db.addMessage(existing.id, 'assistant', card.first_message, {
         device_intent: 'neutral',
@@ -23,12 +24,11 @@ router.post('/', (req, res) => {
       });
       messages = db.getMessages(existing.id);
     }
-    return res.json({ session: existing, messages, card });
+    return res.json({ session: existing, messages, card, slug });
   }
 
-  const session = db.createSession(uuidv4(), card.name);
+  const session = db.createSession(uuidv4(), slug);
 
-  // Inject first_message as assistant message
   if (card.first_message) {
     db.addMessage(session.id, 'assistant', card.first_message, {
       device_intent: 'neutral',
@@ -37,16 +37,16 @@ router.post('/', (req, res) => {
   }
 
   const messages = db.getMessages(session.id);
-  res.json({ session, messages, card });
+  res.json({ session, messages, card, slug });
 });
 
 // GET /api/sessions/:id
 router.get('/:id', (req, res) => {
   const session = db.getSession(req.params.id);
   if (!session) return res.status(404).json({ error: 'Session not found' });
-  const card = loadCard(session.character_name.toLowerCase());
+  const slug = session.character_name.toLowerCase();
+  const card = loadCard(slug);
   let messages = db.getMessages(session.id);
-  // Ensure first_message is always present
   if (messages.length === 0 && card?.first_message) {
     db.addMessage(session.id, 'assistant', card.first_message, {
       device_intent: 'neutral',
@@ -54,7 +54,7 @@ router.get('/:id', (req, res) => {
     });
     messages = db.getMessages(session.id);
   }
-  res.json({ session, messages, card });
+  res.json({ session, messages, card, slug });
 });
 
 module.exports = router;

@@ -62,7 +62,7 @@ const App = (() => {
           </div>
           <div class="char-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg></div>
         `;
-        row.addEventListener('click', () => openChat(c.name, c.session_id));
+        row.addEventListener('click', () => openChat(c.slug, c.session_id));
         list.appendChild(row);
       }
     } catch (err) {
@@ -70,14 +70,12 @@ const App = (() => {
     }
   }
 
-  async function openChat(characterName, existingSessionId) {
-    // Navigate to chat screen
+  async function openChat(characterSlug, existingSessionId) {
     screenList.classList.add('slide-out');
     screenChat.classList.add('active');
 
-    // Show loading state
     Chat.reset();
-    document.getElementById('chat-header-name').textContent = characterName;
+    document.getElementById('chat-header-name').textContent = '…';
     document.getElementById('chat-avatar').src = '';
 
     try {
@@ -89,7 +87,7 @@ const App = (() => {
         res = await fetch('/api/sessions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ character_name: characterName, resume: true }),
+          body: JSON.stringify({ character_name: characterSlug, resume: true }),
         });
         data = await res.json();
       }
@@ -97,8 +95,8 @@ const App = (() => {
       currentSession = data.session;
       currentCard = data.card;
 
-      // Wire up header
-      const avatarUrl = `/characters/${characterName.toLowerCase()}/${currentCard.avatar || 'reference.png'}`;
+      const slug = data.slug || characterSlug;
+      const avatarUrl = `/characters/${slug}/${currentCard.avatar || 'reference.png'}`;
       document.getElementById('chat-avatar').src = avatarUrl;
       document.getElementById('chat-header-name').textContent = currentCard.name;
       document.getElementById('online-dot').classList.add('visible');
