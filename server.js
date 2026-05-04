@@ -8,6 +8,7 @@ const messagesRouter = require('./src/routes/messages');
 const devicesRouter = require('./src/routes/devices');
 const audioRouter = require('./src/routes/audio');
 const sttRouter = require('./src/routes/stt');
+const adminRouter = require('./src/routes/admin');
 const deviceManager = require('./src/modules/deviceManager');
 
 const app = express();
@@ -25,6 +26,7 @@ app.use('/data/images', express.static(path.join(__dirname, 'data/images')));
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.use('/api/characters', charactersRouter);
+app.use('/api/admin', adminRouter);
 app.use('/api/sessions', sessionsRouter);
 app.use('/api/sessions', messagesRouter);
 app.use('/api/devices', devicesRouter);

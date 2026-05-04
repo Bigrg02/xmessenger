@@ -224,6 +224,7 @@ const App = (() => {
     getSession: () => currentSession,
     getCard: () => currentCard,
     formatFullTime,
+    refreshCharacterList: loadCharacterList,
   };
 })();
 

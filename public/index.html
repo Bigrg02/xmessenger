@@ -14,10 +14,10 @@
   <div id="screen-list" class="screen active">
     <header class="list-header">
       <h1>Messages</h1>
-      <button class="icon-btn" id="btn-edit" aria-label="Edit">
+      <button class="icon-btn" id="btn-settings" aria-label="Settings">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
         </svg>
       </button>
     </header>
@@ -45,33 +45,28 @@
         <div class="chat-header-name" id="chat-header-name"></div>
       </div>
       <div class="chat-header-right">
-        <button class="icon-btn" id="btn-video" aria-label="Video">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15 10l4.553-2.553A1 1 0 0 1 21 8.382v7.236a1 1 0 0 1-1.447.894L15 14v-4zm-12 0a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4z"/></svg>
+        <button class="icon-btn" id="btn-chat-info" aria-label="Info">
+          <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12" stroke="white" stroke-width="2"/><line x1="12" y1="16" x2="12.01" y2="16" stroke="white" stroke-width="2"/></svg>
         </button>
       </div>
     </header>
 
-    <!-- Phase indicator -->
     <div id="phase-badge" class="phase-badge hidden">
       <span id="phase-badge-text">Device Mode</span>
     </div>
 
-    <!-- Messages -->
     <div id="message-list" class="message-list">
       <div id="typing-indicator" class="typing-indicator hidden">
-        <div class="typing-bubble">
-          <span></span><span></span><span></span>
-        </div>
+        <div class="typing-bubble"><span></span><span></span><span></span></div>
       </div>
     </div>
 
-    <!-- Input area -->
     <div class="input-area" id="input-area">
       <div class="input-row">
         <button class="circle-btn" id="btn-camera" aria-label="Camera">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
         </button>
-        <div class="text-input-wrap" id="text-input-wrap">
+        <div class="text-input-wrap">
           <input type="text" id="message-input" placeholder="iMessage" autocomplete="off" autocorrect="on" enterkeyhint="send">
           <button class="emoji-btn" id="btn-emoji" aria-label="Emoji">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 13s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
@@ -84,8 +79,6 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
         </button>
       </div>
-
-      <!-- PTT button (device phase only) -->
       <div id="ptt-area" class="ptt-area hidden">
         <button id="btn-ptt" class="ptt-btn">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
@@ -95,13 +88,169 @@
     </div>
   </div>
 
-  <!-- ============ ALWAYS-VISIBLE STOP BUTTON ============ -->
+  <!-- ============ SETTINGS SCREEN ============ -->
+  <div id="screen-settings" class="screen">
+    <header class="list-header">
+      <button class="back-btn" id="btn-settings-back">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+        <span class="back-label">Messages</span>
+      </button>
+      <h1 class="settings-title">Settings</h1>
+      <button class="icon-btn text-btn" id="btn-new-character">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+    </header>
+
+    <div class="settings-body">
+      <div class="settings-section-label">CHARACTERS</div>
+      <div id="settings-char-list" class="settings-char-list"></div>
+    </div>
+  </div>
+
+  <!-- ============ CHARACTER FORM SCREEN ============ -->
+  <div id="screen-char-form" class="screen">
+    <header class="list-header">
+      <button class="back-btn" id="btn-form-back">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+        <span class="back-label">Settings</span>
+      </button>
+      <h1 class="settings-title" id="form-title">New Character</h1>
+      <button class="icon-btn text-btn" id="btn-form-save">
+        <span style="font-size:15px;font-weight:600;color:var(--accent)">Save</span>
+      </button>
+    </header>
+
+    <form id="char-form" class="char-form">
+      <input type="hidden" id="form-slug">
+
+      <!-- Images -->
+      <div class="form-section-label">PHOTOS</div>
+      <div class="photo-row">
+        <div class="photo-slot" id="slot-portrait">
+          <img id="preview-portrait" class="photo-preview hidden" alt="portrait">
+          <div class="photo-placeholder" id="placeholder-portrait">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+            <span>Portrait</span>
+            <span class="photo-hint">Chat avatar</span>
+          </div>
+          <input type="file" id="input-portrait" accept="image/*" class="photo-input">
+        </div>
+        <div class="photo-slot" id="slot-fullbody">
+          <img id="preview-fullbody" class="photo-preview hidden" alt="full body">
+          <div class="photo-placeholder" id="placeholder-fullbody">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="5" r="3"/><path d="M12 8v6M9 11h6M9 20l3-6 3 6"/></svg>
+            <span>Full Body</span>
+            <span class="photo-hint">ComfyUI reference</span>
+          </div>
+          <input type="file" id="input-fullbody" accept="image/*" class="photo-input">
+        </div>
+      </div>
+
+      <!-- Basic info -->
+      <div class="form-section-label">IDENTITY</div>
+      <div class="form-group">
+        <label class="form-label">Name</label>
+        <input type="text" id="form-name" class="form-input" placeholder="Sara" autocomplete="off">
+      </div>
+      <div class="form-group accent-group">
+        <label class="form-label">Accent Color</label>
+        <div class="accent-row">
+          <input type="color" id="form-accent" class="form-color" value="#ff6b9d">
+          <div class="color-presets">
+            <button type="button" class="color-swatch" data-color="#ff6b9d" style="background:#ff6b9d"></button>
+            <button type="button" class="color-swatch" data-color="#ff9500" style="background:#ff9500"></button>
+            <button type="button" class="color-swatch" data-color="#34c759" style="background:#34c759"></button>
+            <button type="button" class="color-swatch" data-color="#007AFF" style="background:#007AFF"></button>
+            <button type="button" class="color-swatch" data-color="#af52de" style="background:#af52de"></button>
+            <button type="button" class="color-swatch" data-color="#ff2d55" style="background:#ff2d55"></button>
+            <button type="button" class="color-swatch" data-color="#5ac8fa" style="background:#5ac8fa"></button>
+            <button type="button" class="color-swatch" data-color="#ff3b30" style="background:#ff3b30"></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Model -->
+      <div class="form-section-label">AI MODEL</div>
+      <div class="form-group">
+        <label class="form-label">OpenRouter Model</label>
+        <select id="form-model" class="form-select">
+          <optgroup label="OpenAI">
+            <option value="openai/gpt-4o">GPT-4o (recommended)</option>
+            <option value="openai/gpt-4o-mini">GPT-4o Mini (fast)</option>
+            <option value="openai/gpt-4-turbo">GPT-4 Turbo</option>
+          </optgroup>
+          <optgroup label="Anthropic">
+            <option value="anthropic/claude-opus-4-7">Claude Opus 4.7</option>
+            <option value="anthropic/claude-sonnet-4-5">Claude Sonnet 4.5</option>
+            <option value="anthropic/claude-haiku-4-5">Claude Haiku 4.5 (fast)</option>
+          </optgroup>
+          <optgroup label="Google">
+            <option value="google/gemini-2.0-flash-001">Gemini 2.0 Flash (fast)</option>
+            <option value="google/gemini-2.5-pro-preview">Gemini 2.5 Pro</option>
+          </optgroup>
+          <optgroup label="Meta">
+            <option value="meta-llama/llama-3.3-70b-instruct">Llama 3.3 70B</option>
+            <option value="meta-llama/llama-3.1-405b-instruct">Llama 3.1 405B</option>
+          </optgroup>
+          <optgroup label="Other">
+            <option value="mistralai/mistral-large">Mistral Large</option>
+            <option value="nousresearch/hermes-3-llama-3.1-405b">Hermes 3 405B</option>
+            <option value="custom">Custom model ID...</option>
+          </optgroup>
+        </select>
+        <input type="text" id="form-model-custom" class="form-input hidden" placeholder="e.g. openai/gpt-4o" style="margin-top:8px">
+      </div>
+
+      <!-- Personality -->
+      <div class="form-section-label">PERSONALITY</div>
+      <div class="form-group">
+        <label class="form-label">Personality</label>
+        <textarea id="form-personality" class="form-textarea" rows="4" placeholder="Who is she? Describe her personality, traits, how she relates to you..."></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Texting Style</label>
+        <textarea id="form-texting-style" class="form-textarea" rows="3" placeholder="How does she text? Short bursts, emojis, ellipses, energy level..."></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Scenario</label>
+        <textarea id="form-scenario" class="form-textarea" rows="3" placeholder="What's the current situation? What's your relationship with her?"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">First Message</label>
+        <input type="text" id="form-first-message" class="form-input" placeholder="Her opening text when a conversation starts">
+      </div>
+
+      <!-- ComfyUI -->
+      <div class="form-section-label">IMAGE GENERATION</div>
+      <div class="form-group">
+        <label class="form-label">Appearance Prompt</label>
+        <textarea id="form-appearance" class="form-textarea" rows="3" placeholder="ComfyUI positive prompt describing her appearance: hair, eyes, style, lighting..."></textarea>
+        <div class="form-hint">This is injected into ComfyUI when generating images. Be specific — describe her look, not the scene.</div>
+      </div>
+
+      <!-- Delete (edit mode only) -->
+      <div id="delete-section" class="hidden">
+        <div class="form-section-label">DANGER ZONE</div>
+        <button type="button" id="btn-delete-char" class="delete-btn">Delete Character</button>
+      </div>
+
+      <div style="height:40px"></div>
+    </form>
+
+    <!-- Save spinner overlay -->
+    <div id="form-saving" class="saving-overlay hidden">
+      <div class="saving-spinner"></div>
+      <div class="saving-label">Saving...</div>
+    </div>
+  </div>
+
+  <!-- ============ STOP BUTTON ============ -->
   <button id="stop-btn" class="stop-btn hidden" aria-label="Emergency Stop">
     <svg viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
     <span>STOP</span>
   </button>
 
-  <!-- Image lightbox -->
+  <!-- Lightbox -->
   <div id="lightbox" class="lightbox hidden">
     <button id="lightbox-close" class="lightbox-close">&times;</button>
     <img id="lightbox-img" src="" alt="">
@@ -110,5 +259,6 @@
   <script src="/js/app.js"></script>
   <script src="/js/chat.js"></script>
   <script src="/js/ptt.js"></script>
+  <script src="/js/settings.js"></script>
 </body>
 </html>
