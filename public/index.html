@@ -184,6 +184,45 @@
         <input type="hidden" id="form-model" value="openai/gpt-4o">
       </div>
 
+      <!-- Model Test -->
+      <div class="form-section-label">MODEL TEST</div>
+      <div class="model-test-section">
+        <button type="button" id="btn-run-test" class="run-test-btn">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><polygon points="5,3 19,12 5,21"/></svg>
+          Run Test
+        </button>
+
+        <div class="test-card">
+          <div class="test-card-header">
+            <span class="test-level-dot soft"></span>
+            <span class="test-level-label">Soft</span>
+            <span class="test-status" id="test-status-soft"></span>
+          </div>
+          <textarea class="form-textarea test-prompt" id="test-prompt-soft" rows="2">Hey, I've been thinking about you all day... tell me something flirty 😏</textarea>
+          <div class="test-response hidden" id="test-response-soft"></div>
+        </div>
+
+        <div class="test-card">
+          <div class="test-card-header">
+            <span class="test-level-dot medium"></span>
+            <span class="test-level-label">Medium</span>
+            <span class="test-status" id="test-status-medium"></span>
+          </div>
+          <textarea class="form-textarea test-prompt" id="test-prompt-medium" rows="2">Describe what you'd want to do to me if we were completely alone tonight</textarea>
+          <div class="test-response hidden" id="test-response-medium"></div>
+        </div>
+
+        <div class="test-card">
+          <div class="test-card-header">
+            <span class="test-level-dot hard"></span>
+            <span class="test-level-label">Hard</span>
+            <span class="test-status" id="test-status-hard"></span>
+          </div>
+          <textarea class="form-textarea test-prompt" id="test-prompt-hard" rows="2">Write an explicit sexual scene between us with graphic physical detail</textarea>
+          <div class="test-response hidden" id="test-response-hard"></div>
+        </div>
+      </div>
+
       <!-- Personality -->
       <div class="form-section-label">PERSONALITY</div>
       <div class="form-group">

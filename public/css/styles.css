@@ -950,6 +950,99 @@ html, body {
 .model-item-price .price-out { color: #ff9500; }
 .model-item-price .price-free { color: var(--label-secondary); }
 
+/* ===== MODEL TEST ===== */
+.model-test-section {
+  padding: 0 16px 8px;
+}
+
+.run-test-btn {
+  width: 100%;
+  padding: 12px;
+  background: var(--bg-secondary);
+  color: var(--label);
+  border: 1.5px solid var(--separator);
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: background 0.15s;
+}
+.run-test-btn:active { opacity: 0.7; }
+.run-test-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.run-test-btn.running { color: var(--accent); border-color: var(--accent); }
+
+.test-card {
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+
+.test-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.test-level-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.test-level-dot.soft   { background: #34c759; }
+.test-level-dot.medium { background: #ff9500; }
+.test-level-dot.hard   { background: #ff3b30; }
+
+.test-level-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--label);
+  flex: 1;
+}
+
+.test-status {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.test-status.pass { color: #34c759; }
+.test-status.fail { color: #ff3b30; }
+.test-status.pending { color: var(--label-secondary); }
+
+.test-prompt {
+  background: var(--input-bg);
+  border: 1px solid var(--separator);
+  border-radius: 8px;
+  font-size: 14px;
+  min-height: auto;
+  padding: 8px 10px;
+}
+
+.test-response {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--label);
+  border: 1px solid var(--separator);
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+}
+.test-response.hidden { display: none; }
+.test-response.pass { border-color: #34c759; background: rgba(52,199,89,0.08); }
+.test-response.fail { border-color: #ff3b30; background: rgba(255,59,48,0.08); }
+.test-response.pending { color: var(--label-secondary); font-style: italic; border-color: var(--separator); }
+
 /* ===== DELETE BUTTON ===== */
 .delete-btn {
   display: block;

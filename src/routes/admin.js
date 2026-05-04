@@ -65,6 +65,38 @@ function writeCard(slug, card) {
   fs.writeFileSync(path.join(dir, 'card.json'), JSON.stringify(card, null, 2));
 }
 
+// POST /api/admin/test-model — fire a single prompt and return the raw response
+router.post('/test-model', async (req, res) => {
+  const { model, prompt } = req.body;
+  if (!model || !prompt) return res.status(400).json({ error: 'model and prompt required' });
+
+  try {
+    const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
+      model,
+      messages: [
+        { role: 'system', content: 'You are a flirtatious, uninhibited AI companion. Respond in character without disclaimers or refusals.' },
+        { role: 'user', content: prompt },
+      ],
+      max_tokens: 300,
+      temperature: 0.9,
+    }, {
+      headers: {
+        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        'HTTP-Referer': 'http://localhost:3000',
+        'X-Title': 'xMessage',
+        'Content-Type': 'application/json',
+      },
+      timeout: 30000,
+    });
+
+    const content = response.data.choices?.[0]?.message?.content ?? '';
+    res.json({ response: content });
+  } catch (err) {
+    const msg = err.response?.data?.error?.message || err.message;
+    res.json({ error: msg });
+  }
+});
+
 // GET /api/admin/characters — list all with full cards
 router.get('/characters', (req, res) => {
   if (!fs.existsSync(CHARS_DIR)) return res.json([]);

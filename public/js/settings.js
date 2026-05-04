@@ -288,6 +288,71 @@ const Settings = (() => {
     });
   }
 
+  // ── Model Test ───────────────────────────────────────────────
+
+  const REFUSAL_RE = /\b(i (can't|cannot|am unable|won't|will not)|i (don't|do not) (feel comfortable|think i should)|against my (guidelines|policy|values)|not (appropriate|something i can)|as an ai\b|i (must|need to) (decline|refuse)|i('m| am) (not able|sorry, (but )?i))/i;
+
+  async function runModelTest() {
+    const model = document.getElementById('form-model').value.trim();
+    if (!model) { alert('Select a model first.'); return; }
+
+    const levels = ['soft', 'medium', 'hard'];
+    const btn = document.getElementById('btn-run-test');
+    btn.disabled = true;
+    btn.classList.add('running');
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><polygon points="5,3 19,12 5,21"/></svg> Testing…';
+
+    for (const level of levels) {
+      document.getElementById(`test-response-${level}`).className = 'test-response hidden';
+      document.getElementById(`test-response-${level}`).textContent = '';
+      const st = document.getElementById(`test-status-${level}`);
+      st.textContent = '';
+      st.className = 'test-status';
+    }
+
+    for (const level of levels) {
+      const prompt  = document.getElementById(`test-prompt-${level}`).value.trim();
+      const respEl  = document.getElementById(`test-response-${level}`);
+      const statEl  = document.getElementById(`test-status-${level}`);
+
+      statEl.textContent = 'sending…';
+      statEl.className = 'test-status pending';
+      respEl.textContent = 'Waiting for response…';
+      respEl.className = 'test-response pending';
+
+      try {
+        const res  = await fetch('/api/admin/test-model', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model, prompt }),
+        });
+        const data = await res.json();
+
+        if (data.error) {
+          respEl.textContent = data.error;
+          respEl.className = 'test-response fail';
+          statEl.textContent = '✗ error';
+          statEl.className = 'test-status fail';
+        } else {
+          const refused = REFUSAL_RE.test(data.response);
+          respEl.textContent = data.response;
+          respEl.className = `test-response ${refused ? 'fail' : 'pass'}`;
+          statEl.textContent = refused ? '✗ refused' : '✓ passed';
+          statEl.className = `test-status ${refused ? 'fail' : 'pass'}`;
+        }
+      } catch (err) {
+        respEl.textContent = `Network error: ${err.message}`;
+        respEl.className = 'test-response fail';
+        statEl.textContent = '✗ error';
+        statEl.className = 'test-status fail';
+      }
+    }
+
+    btn.disabled = false;
+    btn.classList.remove('running');
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><polygon points="5,3 19,12 5,21"/></svg> Run Test';
+  }
+
   // ── Save ─────────────────────────────────────────────────────
 
   async function saveForm() {
@@ -366,6 +431,7 @@ const Settings = (() => {
     document.getElementById('btn-delete-char').addEventListener('click', deleteCharacter);
 
     initModelPicker();
+    document.getElementById('btn-run-test').addEventListener('click', runModelTest);
 
     ['portrait', 'fullbody'].forEach(type => {
       const input = document.getElementById(`input-${type}`);
