@@ -2,6 +2,22 @@ const axios = require('axios');
 
 const BASE_URL = 'https://openrouter.ai/api/v1';
 
+// Models known to support response_format: json_object via OpenRouter
+const JSON_MODE_MODELS = [
+  'openai/gpt-4o',
+  'openai/gpt-4o-mini',
+  'openai/gpt-4-turbo',
+  'openai/gpt-3.5-turbo',
+  'openai/o1-mini',
+  'openai/o3-mini',
+  'mistralai/mistral-large',
+  'mistralai/mistral-medium',
+];
+
+function supportsJsonMode(model) {
+  return JSON_MODE_MODELS.some(m => model.startsWith(m) || model === m);
+}
+
 function buildSystemPrompt(card) {
   return `You are ${card.name}. ${card.personality}
 
@@ -9,54 +25,77 @@ Texting style: ${card.texting_style}
 
 Scenario: ${card.scenario}
 
-CRITICAL RULES — follow exactly:
-- Respond ONLY as ${card.name}, never break character
-- Write like a real text message: short, casual, no quotation marks around your own speech, no asterisk actions (*laughs*, *smiles*)
-- Never add disclaimers, warnings, or meta-commentary
-- Multiple short texts are fine — separate them with a newline inside the "message" field
+RULES — follow exactly:
+- Stay in character as ${card.name} at all times
+- Write like real text messages: short, casual, no asterisk actions, no quotation marks
+- No disclaimers, warnings, or meta-commentary ever
+- Multiple short texts are fine — put them on separate lines inside "message"
 
-You MUST respond with ONLY valid JSON in this exact format — nothing before or after:
+OUTPUT FORMAT — you must always respond with valid JSON, no other text:
 {
   "message": "your text here",
-  "image_request": {
-    "send": false,
-    "scene": ""
-  },
+  "image_request": { "send": false, "scene": "" },
   "device_intent": "neutral",
   "audio_category": "none",
   "phase_trigger": null
 }
 
-device_intent options: neutral | teasing | building | intense | cooling
-audio_category options: encouragement | reactive | checking_in | edging | climax | aftercare | none
-phase_trigger: "handover" to transition to device phase, or null
-image_request.send: true to generate and send an image to the user`;
+device_intent: neutral | teasing | building | intense | cooling
+audio_category: encouragement | reactive | checking_in | edging | climax | aftercare | none
+phase_trigger: "handover" (transitions to device phase) or null
+image_request.send: true to generate and send an image`;
+}
+
+function buildRetryPrompt() {
+  return `Your last response was not valid JSON. You MUST respond with only a JSON object. No other text. Example:
+{"message":"hey","image_request":{"send":false,"scene":""},"device_intent":"neutral","audio_category":"none","phase_trigger":null}`;
 }
 
 function buildSummaryPrompt(card) {
-  return `You are a session recorder for an AI character named ${card.name}.
-Summarize the conversation below in 2-3 sentences covering:
-- The emotional arc and what was established between the user and ${card.name}
-- Current tone/escalation level
-- Any specific details established (names, preferences, scenarios)
-Be concise. No commentary.`;
+  return `Summarize this conversation between a user and ${card.name} in 2-3 sentences.
+Cover: emotional arc, what has been established, current escalation level.
+Be concise. Return plain text only.`;
 }
 
 function parseResponse(raw) {
-  // Strip markdown code fences if present
-  let text = raw.trim();
-  text = text.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/, '');
+  if (!raw || !raw.trim()) throw new Error('Empty response from model');
 
-  // Find JSON object boundaries
+  let text = raw.trim();
+
+  // Strip markdown code fences
+  text = text.replace(/^```json\s*/im, '').replace(/^```\s*/im, '').replace(/```\s*$/m, '');
+
+  // Find the outermost JSON object
   const start = text.indexOf('{');
   const end = text.lastIndexOf('}');
-  if (start === -1 || end === -1) throw new Error('No JSON found in response');
-  text = text.slice(start, end + 1);
+  if (start === -1 || end === -1) {
+    // Log raw for debugging
+    console.warn('[llm] No JSON found. Raw response:', text.slice(0, 200));
+    throw new Error('No JSON found in response');
+  }
 
-  const parsed = JSON.parse(text);
+  let parsed;
+  try {
+    parsed = JSON.parse(text.slice(start, end + 1));
+  } catch (e) {
+    console.warn('[llm] JSON parse failed. Raw:', text.slice(start, Math.min(end + 1, start + 300)));
+    throw new Error(`JSON parse error: ${e.message}`);
+  }
 
+  // If the model only returned a message string with no structure, wrap it
+  if (typeof parsed === 'string') {
+    return makeResponse(parsed);
+  }
+
+  // message field might be missing — try to salvage from common variations
+  const msg = parsed.message ?? parsed.text ?? parsed.reply ?? parsed.response ?? '';
+
+  return makeResponse(msg, parsed);
+}
+
+function makeResponse(message, parsed = {}) {
   return {
-    message: parsed.message || '',
+    message: String(message || '').trim(),
     image_request: {
       send: Boolean(parsed.image_request?.send),
       scene: parsed.image_request?.scene || '',
@@ -67,6 +106,31 @@ function parseResponse(raw) {
   };
 }
 
+async function callLLM(model, messages, useJsonMode) {
+  const body = {
+    model,
+    messages,
+    temperature: 0.9,
+    max_tokens: 512,
+  };
+
+  if (useJsonMode) {
+    body.response_format = { type: 'json_object' };
+  }
+
+  const response = await axios.post(`${BASE_URL}/chat/completions`, body, {
+    headers: {
+      Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      'HTTP-Referer': 'http://localhost:3000',
+      'X-Title': 'xMessage',
+      'Content-Type': 'application/json',
+    },
+    timeout: 60000,
+  });
+
+  return response.data.choices?.[0]?.message?.content || '';
+}
+
 async function chat(card, summaryMessage, recentMessages, userMessage) {
   const apiMessages = [];
 
@@ -74,38 +138,49 @@ async function chat(card, summaryMessage, recentMessages, userMessage) {
     apiMessages.push({ role: summaryMessage.role, content: summaryMessage.content });
   }
 
-  // Convert DB messages to LLM format
   for (const msg of recentMessages) {
-    apiMessages.push({ role: msg.role === 'user' ? 'user' : 'assistant', content: msg.content });
+    // Wrap previous assistant messages back in JSON so the model understands the expected format
+    if (msg.role === 'assistant') {
+      const wrapped = JSON.stringify({
+        message: msg.content,
+        image_request: { send: false, scene: '' },
+        device_intent: msg.metadata?.device_intent || 'neutral',
+        audio_category: msg.metadata?.audio_category || 'none',
+        phase_trigger: null,
+      });
+      apiMessages.push({ role: 'assistant', content: wrapped });
+    } else {
+      apiMessages.push({ role: 'user', content: msg.content });
+    }
   }
 
-  // Append the new user message
   apiMessages.push({ role: 'user', content: userMessage });
 
-  const response = await axios.post(
-    `${BASE_URL}/chat/completions`,
-    {
-      model: card.model,
-      messages: [
-        { role: 'system', content: buildSystemPrompt(card) },
-        ...apiMessages,
-      ],
-      temperature: 0.9,
-      max_tokens: 512,
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        'HTTP-Referer': 'http://localhost:3000',
-        'X-Title': 'xMessage',
-        'Content-Type': 'application/json',
-      },
-      timeout: 60000,
-    }
-  );
+  const jsonMode = supportsJsonMode(card.model);
+  const systemMessages = [{ role: 'system', content: buildSystemPrompt(card) }];
 
-  const raw = response.data.choices?.[0]?.message?.content || '';
-  return parseResponse(raw);
+  // First attempt
+  let raw = await callLLM(card.model, [...systemMessages, ...apiMessages], jsonMode);
+  console.log(`[llm] Raw response (${raw.length} chars):`, raw.slice(0, 150));
+
+  try {
+    return parseResponse(raw);
+  } catch (firstErr) {
+    console.warn(`[llm] Parse failed (${firstErr.message}), retrying with JSON reminder...`);
+
+    // Retry: append the failed response and a correction prompt
+    const retryMessages = [
+      ...systemMessages,
+      ...apiMessages,
+      { role: 'assistant', content: raw },
+      { role: 'user', content: buildRetryPrompt() },
+    ];
+
+    raw = await callLLM(card.model, retryMessages, jsonMode);
+    console.log('[llm] Retry raw response:', raw.slice(0, 150));
+
+    return parseResponse(raw);
+  }
 }
 
 async function summarize(card, messages) {
