@@ -1,0 +1,19 @@
+node_modules/
+.env
+data/
+*.db
+*.sqlite
+
+# Character private content — audio clips, model weights, reference images
+# Keep the folder structure and card.json but not the actual media files
+characters/*/audio/**/*.mp3
+characters/*/audio/**/*.wav
+characters/*/audio/**/*.ogg
+characters/*/audio/**/*.m4a
+characters/*/*.png
+characters/*/*.jpg
+characters/*/*.jpeg
+characters/*/*.webp
+characters/*/*.pth
+characters/*/*.index
+test-results.json

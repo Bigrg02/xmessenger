@@ -1,0 +1,38 @@
+{
+  "1": {
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": {
+      "title": "Load Checkpoint"
+    },
+    "inputs": {
+      "ckpt_name": "your_model.safetensors"
+    }
+  },
+  "2": {
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Positive Prompt"
+    },
+    "inputs": {
+      "text": "INJECT_PROMPT_HERE",
+      "clip": [
+        "1",
+        1
+      ]
+    }
+  },
+  "3": {
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Negative Prompt"
+    },
+    "inputs": {
+      "text": "blurry, ugly, deformed, watermark, text, bad anatomy",
+      "clip": [
+        "1",
+        1
+      ]
+    }
+  },
+  "_comment": "Replace this with your actual ComfyUI workflow exported as API JSON (Workflow > Export (API format)). The build-character script will inject appearance_prompt + scene into CLIPTextEncode nodes titled \"positive\" or \"prompt\"."
+}

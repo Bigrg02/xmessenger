@@ -1,0 +1,23 @@
+services:
+  xmessenger:
+    build: .
+    container_name: xmessenger
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./characters:/app/characters
+      - ./data:/app/data
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - COMFYUI_BASE_URL=${COMFYUI_BASE_URL:-http://host.docker.internal:8188}
+      - INTIFACE_WS_URL=${INTIFACE_WS_URL:-ws://host.docker.internal:12345}
+      - WHISPER_API_URL=${WHISPER_API_URL:-http://host.docker.internal:8000}
+      - PORT=3000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
