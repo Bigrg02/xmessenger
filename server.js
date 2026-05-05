@@ -9,7 +9,6 @@ const devicesRouter = require('./src/routes/devices');
 const audioRouter = require('./src/routes/audio');
 const sttRouter = require('./src/routes/stt');
 const adminRouter = require('./src/routes/admin');
-const deviceManager = require('./src/modules/deviceManager');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -22,6 +21,8 @@ app.use(express.json());
 app.use('/characters', express.static(path.join(__dirname, 'characters')));
 // Serve generated images
 app.use('/data/images', express.static(path.join(__dirname, 'data/images')));
+// Serve uploaded chat photos
+app.use('/data/chat-uploads', express.static(path.join(__dirname, 'data/chat-uploads')));
 // Serve frontend
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -44,7 +45,4 @@ app.get('*', (req, res) => {
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`xMessage listening on port ${PORT}`);
-  deviceManager.connect().catch(err => {
-    console.warn('[devices] Intiface not available:', err.message);
-  });
 });

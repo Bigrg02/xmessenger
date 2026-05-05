@@ -15,7 +15,8 @@ function initDb() {
       created_at INTEGER NOT NULL,
       last_message_at INTEGER,
       phase TEXT NOT NULL DEFAULT 'text',
-      summary TEXT
+      summary TEXT,
+      current_clothing TEXT
     );
 
     CREATE TABLE IF NOT EXISTS messages (
@@ -38,6 +39,11 @@ function initDb() {
 
     CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, created_at);
   `);
+
+  const sessionColumns = db.prepare(`PRAGMA table_info(sessions)`).all().map(column => column.name);
+  if (!sessionColumns.includes('current_clothing')) {
+    db.exec(`ALTER TABLE sessions ADD COLUMN current_clothing TEXT`);
+  }
 }
 
 // Sessions
@@ -81,6 +87,10 @@ function updateSessionSummary(id, summary) {
   db.prepare('UPDATE sessions SET summary = ? WHERE id = ?').run(summary, id);
 }
 
+function updateSessionClothing(id, clothing) {
+  db.prepare('UPDATE sessions SET current_clothing = ? WHERE id = ?').run(clothing || null, id);
+}
+
 function touchSession(id) {
   db.prepare('UPDATE sessions SET last_message_at = ? WHERE id = ?').run(Date.now(), id);
 }
@@ -102,9 +112,24 @@ function getMessageById(id) {
   return msg;
 }
 
+function updateMessageMetadata(id, metadata = null) {
+  db.prepare('UPDATE messages SET metadata = ? WHERE id = ?')
+    .run(metadata ? JSON.stringify(metadata) : null, id);
+  return getMessageById(id);
+}
+
+function updateMessageContentAndMetadata(id, content, metadata = null) {
+  db.prepare('UPDATE messages SET content = ?, metadata = ? WHERE id = ?')
+    .run(content, metadata ? JSON.stringify(metadata) : null, id);
+  return getMessageById(id);
+}
+
 function getMessages(sessionId, limit = 100) {
   const rows = db.prepare(`
-    SELECT * FROM messages WHERE session_id = ? ORDER BY created_at ASC LIMIT ?
+    SELECT * FROM (
+      SELECT * FROM messages WHERE session_id = ? ORDER BY created_at DESC LIMIT ?
+    )
+    ORDER BY created_at ASC
   `).all(sessionId, limit);
   return rows.map(r => ({ ...r, metadata: r.metadata ? JSON.parse(r.metadata) : null }));
 }
@@ -137,9 +162,12 @@ module.exports = {
   getOrCreateSession,
   updateSessionPhase,
   updateSessionSummary,
+  updateSessionClothing,
   touchSession,
   addMessage,
   getMessageById,
+  updateMessageMetadata,
+  updateMessageContentAndMetadata,
   getMessages,
   getRecentMessages,
   countMessages,

@@ -4,6 +4,7 @@
 const App = (() => {
   let currentSession = null;
   let currentCard = null;
+  let currentSlug = null;
   let sseSource = null;
 
   const screenList = document.getElementById('screen-list');
@@ -36,7 +37,7 @@ const App = (() => {
 
   async function loadCharacterList() {
     const list = document.getElementById('character-list');
-    list.innerHTML = '<div style="padding:32px;text-align:center;color:var(--label-secondary)">Loading…</div>';
+    list.innerHTML = '<div style="padding:32px;text-align:center;color:var(--label-secondary)">Loading...</div>';
 
     try {
       const res = await fetch('/api/characters');
@@ -70,49 +71,46 @@ const App = (() => {
     }
   }
 
-  async function openChat(characterSlug, existingSessionId) {
+  async function openChat(characterSlug, existingSessionId, forceFresh = false) {
     screenList.classList.add('slide-out');
     screenChat.classList.add('active');
 
     Chat.reset();
-    document.getElementById('chat-header-name').textContent = '…';
+    document.getElementById('chat-header-name').textContent = '...';
     document.getElementById('chat-avatar').src = '';
 
     try {
-      let res, data;
-      if (existingSessionId) {
+      let res;
+      let data;
+      if (existingSessionId && !forceFresh) {
         res = await fetch(`/api/sessions/${existingSessionId}`);
         data = await res.json();
       } else {
         res = await fetch('/api/sessions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ character_name: characterSlug, resume: true }),
+          body: JSON.stringify({ character_name: characterSlug, resume: !forceFresh }),
         });
         data = await res.json();
       }
 
       currentSession = data.session;
       currentCard = data.card;
+      currentSlug = data.slug || characterSlug;
 
-      const slug = data.slug || characterSlug;
-      const avatarUrl = `/characters/${slug}/${currentCard.avatar || 'reference.png'}`;
+      const avatarUrl = `/characters/${currentSlug}/${currentCard.avatar || 'reference.png'}`;
       document.getElementById('chat-avatar').src = avatarUrl;
       document.getElementById('chat-header-name').textContent = currentCard.name;
       document.getElementById('online-dot').classList.add('visible');
 
-      // Set accent color on CSS var
       document.documentElement.style.setProperty('--char-accent', currentCard.accent_color || '#007AFF');
 
-      // Render existing messages
       Chat.renderMessages(data.messages, currentCard);
 
-      // Set phase
       if (currentSession.phase === 'device') Chat.enterDevicePhase();
 
-      // Connect SSE
       connectSSE(currentSession.id);
-
+      Chat.refreshDeviceState(currentSession.id);
     } catch (err) {
       console.error('Failed to open chat:', err);
       Chat.showError('Could not load conversation');
@@ -133,6 +131,16 @@ const App = (() => {
       Chat.appendImage(data, currentCard);
     });
 
+    sseSource.addEventListener('image_replaced', e => {
+      const data = JSON.parse(e.data);
+      Chat.replaceImage?.(data);
+    });
+
+    sseSource.addEventListener('message_metadata', e => {
+      const data = JSON.parse(e.data);
+      Chat.updateMessageMetadata?.(data.messageId, data.metadata);
+    });
+
     sseSource.addEventListener('typing', e => {
       const { visible } = JSON.parse(e.data);
       Chat.setTyping(visible);
@@ -145,9 +153,17 @@ const App = (() => {
 
     sseSource.addEventListener('device', e => {
       const data = JSON.parse(e.data);
-      if (data.intent === 'stopped') {
-        // handled by stop button
-      }
+      Chat.handleDeviceEvent?.(data);
+    });
+
+    sseSource.addEventListener('device_state', e => {
+      const data = JSON.parse(e.data);
+      Chat.updateDeviceState(data);
+    });
+
+    sseSource.addEventListener('device_command', e => {
+      const data = JSON.parse(e.data);
+      Chat.handleDeviceCommand(data);
     });
 
     sseSource.addEventListener('phase', e => {
@@ -171,24 +187,41 @@ const App = (() => {
   }
 
   function closeChat() {
-    if (sseSource) { sseSource.close(); sseSource = null; }
+    if (sseSource) {
+      sseSource.close();
+      sseSource = null;
+    }
     currentSession = null;
     currentCard = null;
+    currentSlug = null;
     screenChat.classList.remove('active');
     screenList.classList.remove('slide-out');
     loadCharacterList();
   }
 
+  async function restartChat() {
+    if (!currentSlug || !currentCard) return;
+
+    const confirmed = window.confirm(`Start a fresh chat with ${currentCard.name}?`);
+    if (!confirmed) return;
+
+    try {
+      await fetch('/api/devices/stop', { method: 'POST' });
+    } catch (_) {}
+
+    await openChat(currentSlug, null, true);
+  }
+
   function truncate(str, len) {
-    return str.length > len ? str.slice(0, len) + '…' : str;
+    return str.length > len ? str.slice(0, len) + '...' : str;
   }
 
   function init() {
     loadCharacterList();
 
     document.getElementById('btn-back').addEventListener('click', closeChat);
+    document.getElementById('btn-restart-chat').addEventListener('click', restartChat);
 
-    // Search filter
     document.getElementById('search-input').addEventListener('input', e => {
       const q = e.target.value.toLowerCase();
       document.querySelectorAll('.char-row').forEach(row => {
@@ -197,23 +230,15 @@ const App = (() => {
       });
     });
 
-    // Emergency stop
     document.getElementById('stop-btn').addEventListener('click', async () => {
       await fetch('/api/devices/stop', { method: 'POST' });
       navigator.vibrate?.(200);
     });
 
-    // Lightbox
-    document.getElementById('lightbox-close').addEventListener('click', () => {
-      document.getElementById('lightbox').classList.add('hidden');
-    });
-    document.getElementById('lightbox').addEventListener('click', e => {
-      if (e.target === e.currentTarget) e.currentTarget.classList.add('hidden');
-    });
-
-    // Keyboard shortcut: Escape = emergency stop
     document.addEventListener('keydown', e => {
-      if (e.key === 'Escape') document.getElementById('stop-btn').click();
+      if (e.key === 'Escape' && document.getElementById('lightbox')?.classList.contains('hidden')) {
+        document.getElementById('stop-btn').click();
+      }
     });
   }
 
@@ -221,6 +246,7 @@ const App = (() => {
     init,
     getSession: () => currentSession,
     getCard: () => currentCard,
+    getSlug: () => currentSlug,
     formatFullTime,
     refreshCharacterList: loadCharacterList,
   };
@@ -232,7 +258,10 @@ const Audio = (() => {
 
   function play(url) {
     if (!url) return;
-    if (player) { player.pause(); player.src = ''; }
+    if (player) {
+      player.pause();
+      player.src = '';
+    }
     player = new window.Audio(url);
     player.play().catch(() => {});
   }

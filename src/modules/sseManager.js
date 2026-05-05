@@ -38,8 +38,14 @@ function send(sessionId, event, data) {
   }
 }
 
+function broadcast(event, data) {
+  for (const [sessionId] of connections.entries()) {
+    send(sessionId, event, data);
+  }
+}
+
 function isConnected(sessionId) {
   return connections.has(sessionId);
 }
 
-module.exports = { register, send, isConnected };
+module.exports = { register, send, broadcast, isConnected };

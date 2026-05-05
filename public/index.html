@@ -45,14 +45,94 @@
         <div class="chat-header-name" id="chat-header-name"></div>
       </div>
       <div class="chat-header-right">
-        <button class="icon-btn" id="btn-chat-info" aria-label="Info">
-          <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12" stroke="white" stroke-width="2"/><line x1="12" y1="16" x2="12.01" y2="16" stroke="white" stroke-width="2"/></svg>
+        <button class="icon-btn restart-btn" id="btn-restart-chat" aria-label="Restart Chat" title="Restart Chat">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 12a9 9 0 1 1-2.64-6.36"/>
+            <polyline points="21 3 21 9 15 9"/>
+          </svg>
+        </button>
+        <button class="icon-btn scene-btn" id="btn-generate-scene" aria-label="Generate Scene Image" title="Generate Scene Image">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="5" width="18" height="14" rx="2"/>
+            <circle cx="9" cy="10" r="2"/>
+            <path d="M21 15l-5-5L5 21"/>
+          </svg>
+          <span class="toy-btn-label">Scene</span>
+        </button>
+        <button class="icon-btn toy-btn" id="btn-chat-info" aria-label="Toys" title="Toys">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="7" y="3" width="10" height="8" rx="3"/>
+            <path d="M12 11v10"/>
+            <path d="M9 21h6"/>
+          </svg>
+          <span class="toy-btn-label">Toys</span>
         </button>
       </div>
     </header>
 
     <div id="phase-badge" class="phase-badge hidden">
       <span id="phase-badge-text">Device Mode</span>
+    </div>
+
+    <div id="device-sheet" class="device-sheet hidden">
+      <div class="device-sheet-header">
+        <div>
+          <div class="device-sheet-title">Control Session</div>
+          <div id="device-connection-status" class="device-sheet-subtitle">Checking devices…</div>
+        </div>
+        <button type="button" id="btn-device-sheet-collapse" class="device-collapse-btn" aria-label="Collapse controls">Hide</button>
+      </div>
+
+      <div id="device-setup-copy" class="device-setup-copy">
+        Connect Lovense here first. Once your toy is linked, arm it below and your character can take over during device mode.
+      </div>
+
+      <div id="device-setup-help" class="device-setup-help hidden">
+        <div class="device-help-title">How to connect Lovense</div>
+        <ol class="device-help-list">
+          <li>Install and open Lovense Remote or Lovense Connect.</li>
+          <li>Tap <strong>Connect Lovense</strong> below to show the QR code.</li>
+          <li>Scan that code from the Lovense app.</li>
+          <li>When your toy appears here, choose a body zone and leave it armed.</li>
+        </ol>
+      </div>
+
+      <div class="lovense-connect-box">
+        <div id="lovense-pairing-status" class="lovense-pairing-status">Not linked yet</div>
+        <div id="lovense-qr-wrap" class="lovense-qr-wrap hidden">
+          <img id="lovense-qr-image" class="lovense-qr-image" alt="Lovense QR code">
+          <div id="lovense-qr-code" class="lovense-qr-code"></div>
+        </div>
+      </div>
+
+      <div class="device-sheet-actions device-sheet-actions-secondary">
+        <button type="button" id="btn-lovense-connect" class="device-action-btn secondary">Connect Lovense</button>
+        <button type="button" id="btn-lovense-disconnect" class="device-action-btn secondary">Disconnect</button>
+      </div>
+
+      <div class="device-sheet-actions">
+        <button type="button" id="btn-device-autonomy" class="device-action-btn">Character Control On</button>
+        <button type="button" id="btn-device-pause" class="device-action-btn">Pause Character</button>
+        <button type="button" id="btn-device-stop-inline" class="device-action-btn danger">Emergency Stop</button>
+      </div>
+
+      <div class="device-sheet-group">
+        <div class="device-group-label-row">
+          <label class="device-group-label" for="device-global-max">Character Intensity Cap</label>
+          <span id="device-global-max-value" class="device-group-value">85%</span>
+        </div>
+        <input type="range" id="device-global-max" min="0" max="1" step="0.01" value="0.85">
+      </div>
+
+      <div class="device-sheet-group">
+        <div class="device-group-label-row">
+          <span class="device-group-label">What The Character Is Doing</span>
+          <span id="device-current-action" class="device-group-value">Idle</span>
+        </div>
+      </div>
+
+      <div id="device-list" class="device-list"></div>
+      <div id="device-empty-state" class="device-empty-state hidden">No controllable devices connected.</div>
     </div>
 
     <div id="message-list" class="message-list">
@@ -66,6 +146,7 @@
         <button class="circle-btn" id="btn-camera" aria-label="Camera">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
         </button>
+        <input type="file" id="chat-image-input" accept="image/*" class="hidden" aria-hidden="true">
         <div class="text-input-wrap">
           <input type="text" id="message-input" placeholder="iMessage" autocomplete="off" autocorrect="on" enterkeyhint="send">
           <button class="emoji-btn" id="btn-emoji" aria-label="Emoji">
@@ -104,6 +185,42 @@
     <div class="settings-body">
       <div class="settings-section-label">CHARACTERS</div>
       <div id="settings-char-list" class="settings-char-list"></div>
+
+      <div class="settings-section-label">COMFYUI WORKFLOW</div>
+      <div class="settings-card">
+        <div class="settings-card-copy">
+          Point xMessage at the exact ComfyUI node IDs that should receive the assembled prompt and the uploaded character reference image.
+        </div>
+
+        <div class="form-group settings-card-group">
+          <label class="form-label" for="comfy-prompt-node-ids">Prompt Node IDs</label>
+          <input type="text" id="comfy-prompt-node-ids" class="form-input" placeholder="12">
+          <div class="form-hint">Comma-separated. Use the exported workflow node ID for the <code>CLIPTextEncode</code> node that should receive the final assembled prompt.</div>
+        </div>
+
+        <div class="form-group settings-card-group">
+          <label class="form-label" for="comfy-reference-node-ids">Reference Image Node IDs</label>
+          <input type="text" id="comfy-reference-node-ids" class="form-input" placeholder="27">
+          <div class="form-hint">Comma-separated. Use the exported workflow node ID for the image-loader node that should receive the uploaded character reference image.</div>
+        </div>
+
+        <div class="form-group settings-card-group">
+          <label class="form-label" for="comfy-seed-node-ids">Seed Node IDs</label>
+          <input type="text" id="comfy-seed-node-ids" class="form-input" placeholder="125">
+          <div class="form-hint">Optional. Comma-separated. Use this if you want xMessage to randomize specific sampler or noise seed nodes on every image generation and regenerate. If left blank, xMessage will auto-randomize common <code>seed</code> or <code>noise_seed</code> inputs it finds.</div>
+        </div>
+
+        <div class="form-group settings-card-group">
+          <label class="form-label">Available Workflow Nodes</label>
+          <div id="comfy-workflow-nodes" class="workflow-node-list">Loading workflow nodes...</div>
+          <div class="form-hint">These come from <code>workflows/comfyui/workflow.json</code>. Rename nodes in ComfyUI if you want cleaner titles to target here.</div>
+        </div>
+
+        <div class="settings-card-actions">
+          <button type="button" id="btn-comfyui-refresh" class="run-test-btn secondary-action-btn settings-inline-btn">Refresh Nodes</button>
+          <button type="button" id="btn-comfyui-save" class="run-test-btn settings-inline-btn">Save Workflow Bindings</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -187,6 +304,27 @@
       <!-- Model Test -->
       <div class="form-section-label">MODEL TEST</div>
       <div class="model-test-section">
+        <button type="button" id="btn-prompt-preview" class="run-test-btn secondary-action-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+            <path d="M3 12h18"/>
+            <path d="M12 3v18"/>
+            <circle cx="12" cy="12" r="9"/>
+          </svg>
+          Prompt Preview
+        </button>
+        <button type="button" id="btn-generate-draft" class="run-test-btn secondary-action-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+            <path d="M12 3v6"/>
+            <path d="M12 15v6"/>
+            <path d="M3 12h6"/>
+            <path d="M15 12h6"/>
+            <path d="M5.64 5.64l4.24 4.24"/>
+            <path d="M14.12 14.12l4.24 4.24"/>
+            <path d="M18.36 5.64l-4.24 4.24"/>
+            <path d="M9.88 14.12l-4.24 4.24"/>
+          </svg>
+          Generate Full Draft
+        </button>
         <button type="button" id="btn-run-test" class="run-test-btn">
           <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><polygon points="5,3 19,12 5,21"/></svg>
           Run Test
@@ -223,8 +361,8 @@
         </div>
       </div>
 
-      <!-- Personality -->
-      <div class="form-section-label">PERSONALITY</div>
+      <!-- Core voice -->
+      <div class="form-section-label">CORE VOICE</div>
       <div class="form-group">
         <label class="form-label">Personality</label>
         <textarea id="form-personality" class="form-textarea" rows="4" placeholder="Who is she? Describe her personality, traits, how she relates to you..."></textarea>
@@ -234,12 +372,62 @@
         <textarea id="form-texting-style" class="form-textarea" rows="3" placeholder="How does she text? Short bursts, emojis, ellipses, energy level..."></textarea>
       </div>
       <div class="form-group">
-        <label class="form-label">Scenario</label>
-        <textarea id="form-scenario" class="form-textarea" rows="3" placeholder="What's the current situation? What's your relationship with her?"></textarea>
+        <label class="form-label">Example Dialogue</label>
+        <textarea id="form-example-dialogue" class="form-textarea" rows="4" placeholder="A few lines that sound exactly like her. This should guide voice, not act as a script."></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Pet Names</label>
+        <input type="text" id="form-pet-names" class="form-input" placeholder="baby, handsome, good boy">
+        <div class="form-hint">Comma-separated. Leave blank if she does not use pet names.</div>
+      </div>
+
+      <!-- Relationship -->
+      <div class="form-section-label">RELATIONSHIP</div>
+      <div class="form-group">
+        <label class="form-label">Backstory</label>
+        <textarea id="form-backstory" class="form-textarea" rows="4" placeholder="Who is she, what matters about her history, and what shaped her?"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Relationship to User</label>
+        <textarea id="form-relationship" class="form-textarea" rows="4" placeholder="What is the bond, dynamic, chemistry, familiarity, and emotional tone between you?"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Current Scenario / Context</label>
+        <textarea id="form-scenario" class="form-textarea" rows="3" placeholder="What is the current situation between you right now?"></textarea>
       </div>
       <div class="form-group">
         <label class="form-label">First Message</label>
         <input type="text" id="form-first-message" class="form-input" placeholder="Her opening text when a conversation starts">
+      </div>
+
+      <!-- Adult profile -->
+      <div class="form-section-label">ADULT PROFILE</div>
+      <div class="form-group">
+        <label class="form-label">Sexual Personality</label>
+        <textarea id="form-sexual-personality" class="form-textarea" rows="4" placeholder="How does she act when flirting turns explicit? Teasing, dominant, soft, needy, playful, intense, patient..."></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Core Desires</label>
+        <textarea id="form-core-desires" class="form-textarea" rows="4" placeholder="What does she want emotionally and sexually from the user?"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Turn-Ons</label>
+        <input type="text" id="form-turn-ons" class="form-input" placeholder="teasing, praise, eye contact, slow build">
+        <div class="form-hint">Comma-separated short phrases.</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Kinks</label>
+        <input type="text" id="form-kinks" class="form-input" placeholder="edging, orgasm control, dirty talk">
+        <div class="form-hint">Comma-separated short phrases.</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Limits</label>
+        <input type="text" id="form-limits" class="form-input" placeholder="humiliation, pain, public exposure">
+        <div class="form-hint">Comma-separated hard no / avoid items. These always shape prompt behavior.</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Aftercare Style</label>
+        <textarea id="form-aftercare-style" class="form-textarea" rows="3" placeholder="How does she act after intensity or climax? Reassuring, possessive, sleepy, doting, grounding..."></textarea>
       </div>
 
       <!-- ComfyUI -->
@@ -275,9 +463,105 @@
   <!-- Lightbox -->
   <div id="lightbox" class="lightbox hidden">
     <button id="lightbox-close" class="lightbox-close">&times;</button>
-    <img id="lightbox-img" src="" alt="">
+    <div class="lightbox-toolbar">
+      <button id="lightbox-zoom-out" class="lightbox-tool-btn" type="button" aria-label="Zoom out">-</button>
+      <button id="lightbox-zoom-reset" class="lightbox-tool-btn" type="button" aria-label="Reset zoom">100%</button>
+      <button id="lightbox-zoom-in" class="lightbox-tool-btn" type="button" aria-label="Zoom in">+</button>
+    </div>
+    <div class="lightbox-content">
+      <div class="lightbox-image-wrap">
+        <img id="lightbox-img" src="" alt="">
+      </div>
+      <aside id="lightbox-prompt-panel" class="lightbox-prompt-panel hidden">
+        <div class="lightbox-panel-header">
+          <h3>Generation Prompt</h3>
+          <button id="lightbox-regenerate" class="lightbox-panel-btn hidden" type="button">Regenerate</button>
+        </div>
+        <div id="lightbox-prompt-meta" class="lightbox-prompt-meta"></div>
+        <pre id="lightbox-prompt-text" class="lightbox-prompt-text"></pre>
+      </aside>
+    </div>
   </div>
 
+  <!-- Draft prompt modal -->
+  <div id="draft-modal" class="modal-backdrop hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2>Quick Draft</h2>
+        <button type="button" id="btn-draft-modal-close" class="modal-close-btn" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <label class="form-label" for="draft-prompt-input">One-line concept</label>
+        <textarea id="draft-prompt-input" class="form-textarea modal-textarea" rows="3" placeholder="Confident teasing brunette coworker who acts composed in public but gets needy and possessive in private"></textarea>
+        <div class="form-hint">Give the model a simple direction. It will use this along with anything already filled in.</div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" id="btn-draft-modal-cancel" class="modal-btn modal-btn-secondary">Cancel</button>
+        <button type="button" id="btn-draft-modal-generate" class="modal-btn modal-btn-primary">Generate Draft</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Prompt preview modal -->
+  <div id="prompt-modal" class="modal-backdrop hidden">
+    <div class="modal-card modal-card-wide">
+      <div class="modal-header">
+        <h2>Prompt Preview</h2>
+        <button type="button" id="btn-prompt-modal-close" class="modal-close-btn" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group modal-form-group">
+          <label class="form-label" for="prompt-phase-select">Phase</label>
+          <select id="prompt-phase-select" class="form-select">
+            <option value="text">Text</option>
+            <option value="device">Device</option>
+          </select>
+        </div>
+        <div class="form-group modal-form-group">
+          <label class="form-label" for="prompt-sample-message">Sample User Message</label>
+          <textarea id="prompt-sample-message" class="form-textarea modal-textarea" rows="3" placeholder="hey, how is your day going?"></textarea>
+        </div>
+        <div class="form-group modal-form-group">
+          <label class="form-label">Triggered Sections</label>
+          <div id="prompt-preview-flags" class="prompt-flags"></div>
+        </div>
+        <div class="form-group modal-form-group">
+          <label class="form-label" for="prompt-preview-output">Final Prompt</label>
+          <textarea id="prompt-preview-output" class="form-textarea prompt-output" rows="14" readonly></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" id="btn-prompt-copy" class="modal-btn modal-btn-secondary">Copy Prompt</button>
+        <button type="button" id="btn-prompt-refresh" class="modal-btn modal-btn-primary">Refresh Preview</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chat photo modal -->
+  <div id="chat-image-modal" class="modal-backdrop hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2>Send Photo</h2>
+        <button type="button" id="btn-chat-image-close" class="modal-close-btn" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="chat-image-preview-wrap">
+          <img id="chat-image-preview" class="chat-image-preview" alt="Selected photo preview">
+        </div>
+        <div class="form-group modal-form-group">
+          <label class="form-label" for="chat-image-caption">Caption or question</label>
+          <textarea id="chat-image-caption" class="form-textarea modal-textarea" rows="3" placeholder="What do you think of this?" maxlength="500"></textarea>
+        </div>
+        <div id="chat-image-error" class="chat-image-error hidden"></div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" id="btn-chat-image-cancel" class="modal-btn modal-btn-secondary">Cancel</button>
+        <button type="button" id="btn-chat-image-send" class="modal-btn modal-btn-primary">Send Photo</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/vendor/socket.io.min.js"></script>
   <script src="/js/app.js"></script>
   <script src="/js/chat.js"></script>
   <script src="/js/ptt.js"></script>

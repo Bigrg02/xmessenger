@@ -4,9 +4,13 @@ const Settings = (() => {
   const screenList     = document.getElementById('screen-list');
   const screenSettings = document.getElementById('screen-settings');
   const screenForm     = document.getElementById('screen-char-form');
+  const draftModal     = document.getElementById('draft-modal');
+  const promptModal    = document.getElementById('prompt-modal');
+  const workflowNodesEl = document.getElementById('comfy-workflow-nodes');
 
   let editingSlug = null;
   let loadToken = 0;
+  let comfySettingsLoaded = false;
 
   // ── Navigation ──────────────────────────────────────────────
 
@@ -14,6 +18,7 @@ const Settings = (() => {
     screenList.classList.add('slide-out');
     screenSettings.classList.add('active');
     loadSettingsCharList();
+    loadComfyUiSettings();
   }
 
   function closeSettings() {
@@ -44,6 +49,35 @@ const Settings = (() => {
     screenForm.classList.remove('active');
     screenSettings.classList.remove('slide-out');
     loadSettingsCharList();
+  }
+
+  function openDraftModal() {
+    document.getElementById('draft-prompt-input').value = '';
+    draftModal.classList.remove('hidden');
+    setTimeout(() => document.getElementById('draft-prompt-input').focus(), 10);
+  }
+
+  function closeDraftModal() {
+    draftModal.classList.add('hidden');
+  }
+
+  function openPromptModal() {
+    const name = document.getElementById('form-name').value.trim();
+    if (!editingSlug || !name) {
+      alert('Save or open a character first to preview its prompt.');
+      return;
+    }
+
+    document.getElementById('prompt-phase-select').value = 'text';
+    document.getElementById('prompt-sample-message').value = 'hey, how is your day going?';
+    document.getElementById('prompt-preview-output').value = 'Loading prompt preview...';
+    document.getElementById('prompt-preview-flags').innerHTML = '';
+    promptModal.classList.remove('hidden');
+    refreshPromptPreview();
+  }
+
+  function closePromptModal() {
+    promptModal.classList.add('hidden');
   }
 
   // ── Character List (Settings screen) ────────────────────────
@@ -81,6 +115,86 @@ const Settings = (() => {
       }
     } catch (err) {
       el.innerHTML = `<div style="padding:24px;text-align:center;color:#ff3b30">Error: ${err.message}</div>`;
+    }
+  }
+
+  function renderWorkflowNodes(nodes = []) {
+    if (!workflowNodesEl) return;
+
+    if (!nodes.length) {
+      workflowNodesEl.innerHTML = '<div class="workflow-node-empty">No titled nodes found in the shared workflow yet.</div>';
+      return;
+    }
+
+    workflowNodesEl.innerHTML = '';
+    for (const node of nodes) {
+      const row = document.createElement('div');
+      row.className = 'workflow-node-item';
+      row.innerHTML = `
+        <div class="workflow-node-title">${escapeHtml(node.title || '(Untitled)')}</div>
+        <div class="workflow-node-meta">${escapeHtml(node.class_type || 'Unknown')}<br>#${escapeHtml(String(node.id || ''))}</div>
+      `;
+      workflowNodesEl.appendChild(row);
+    }
+  }
+
+  function escapeHtml(value) {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  async function loadComfyUiSettings(force = false) {
+    if (comfySettingsLoaded && !force) return;
+
+    workflowNodesEl.innerHTML = '<div class="workflow-node-empty">Loading workflow nodes...</div>';
+
+    try {
+      const res = await fetch('/api/admin/comfyui-settings');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to load ComfyUI settings');
+
+      document.getElementById('comfy-prompt-node-ids').value = (data.settings?.prompt_node_ids || []).join(', ');
+      document.getElementById('comfy-reference-node-ids').value = (data.settings?.reference_image_node_ids || []).join(', ');
+      document.getElementById('comfy-seed-node-ids').value = (data.settings?.seed_node_ids || []).join(', ');
+      renderWorkflowNodes(data.workflow_nodes || []);
+      comfySettingsLoaded = true;
+    } catch (err) {
+      workflowNodesEl.innerHTML = `<div class="workflow-node-empty">Error loading workflow nodes: ${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  async function saveComfyUiSettings() {
+    const btn = document.getElementById('btn-comfyui-save');
+    const originalLabel = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    try {
+      const res = await fetch('/api/admin/comfyui-settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt_node_ids: document.getElementById('comfy-prompt-node-ids').value.trim(),
+          reference_image_node_ids: document.getElementById('comfy-reference-node-ids').value.trim(),
+          seed_node_ids: document.getElementById('comfy-seed-node-ids').value.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save ComfyUI settings');
+
+      document.getElementById('comfy-prompt-node-ids').value = (data.settings?.prompt_node_ids || []).join(', ');
+      document.getElementById('comfy-reference-node-ids').value = (data.settings?.reference_image_node_ids || []).join(', ');
+      document.getElementById('comfy-seed-node-ids').value = (data.settings?.seed_node_ids || []).join(', ');
+      renderWorkflowNodes(data.workflow_nodes || []);
+    } catch (err) {
+      alert(`ComfyUI settings failed to save: ${err.message}`);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = originalLabel;
     }
   }
 
@@ -219,7 +333,17 @@ const Settings = (() => {
     document.getElementById('form-accent').value = '#ff6b9d';
     document.getElementById('form-personality').value = '';
     document.getElementById('form-texting-style').value = '';
+    document.getElementById('form-example-dialogue').value = '';
+    document.getElementById('form-pet-names').value = '';
+    document.getElementById('form-backstory').value = '';
+    document.getElementById('form-relationship').value = '';
     document.getElementById('form-scenario').value = '';
+    document.getElementById('form-sexual-personality').value = '';
+    document.getElementById('form-core-desires').value = '';
+    document.getElementById('form-turn-ons').value = '';
+    document.getElementById('form-kinks').value = '';
+    document.getElementById('form-limits').value = '';
+    document.getElementById('form-aftercare-style').value = '';
     document.getElementById('form-first-message').value = '';
     document.getElementById('form-appearance').value = '';
     setModelValue('openai/gpt-4o');
@@ -244,7 +368,17 @@ const Settings = (() => {
       document.getElementById('form-accent').value = c.accent_color || '#ff6b9d';
       document.getElementById('form-personality').value = c.personality || '';
       document.getElementById('form-texting-style').value = c.texting_style || '';
+      document.getElementById('form-example-dialogue').value = c.example_dialogue || '';
+      document.getElementById('form-pet-names').value = (c.pet_names || []).join(', ');
+      document.getElementById('form-backstory').value = c.backstory || '';
+      document.getElementById('form-relationship').value = c.relationship_to_user || '';
       document.getElementById('form-scenario').value = c.scenario || '';
+      document.getElementById('form-sexual-personality').value = c.sexual_personality || '';
+      document.getElementById('form-core-desires').value = c.core_desires || '';
+      document.getElementById('form-turn-ons').value = (c.turn_ons || []).join(', ');
+      document.getElementById('form-kinks').value = (c.kinks || []).join(', ');
+      document.getElementById('form-limits').value = (c.limits || []).join(', ');
+      document.getElementById('form-aftercare-style').value = c.aftercare_style || '';
       document.getElementById('form-first-message').value = c.first_message || '';
       document.getElementById('form-appearance').value = c.appearance_prompt || '';
 
@@ -286,6 +420,103 @@ const Settings = (() => {
     document.querySelectorAll('.color-swatch').forEach(sw => {
       sw.classList.toggle('selected', sw.dataset.color.toLowerCase() === color.toLowerCase());
     });
+  }
+
+  function collectDraftSeed() {
+    return {
+      name: document.getElementById('form-name').value.trim(),
+      personality: document.getElementById('form-personality').value.trim(),
+      texting_style: document.getElementById('form-texting-style').value.trim(),
+      example_dialogue: document.getElementById('form-example-dialogue').value.trim(),
+      pet_names: document.getElementById('form-pet-names').value.trim(),
+      backstory: document.getElementById('form-backstory').value.trim(),
+      relationship_to_user: document.getElementById('form-relationship').value.trim(),
+      scenario: document.getElementById('form-scenario').value.trim(),
+      sexual_personality: document.getElementById('form-sexual-personality').value.trim(),
+      core_desires: document.getElementById('form-core-desires').value.trim(),
+      turn_ons: document.getElementById('form-turn-ons').value.trim(),
+      kinks: document.getElementById('form-kinks').value.trim(),
+      limits: document.getElementById('form-limits').value.trim(),
+      aftercare_style: document.getElementById('form-aftercare-style').value.trim(),
+      first_message: document.getElementById('form-first-message').value.trim(),
+      appearance_prompt: document.getElementById('form-appearance').value.trim(),
+    };
+  }
+
+  function applyGeneratedDraft(draft) {
+    document.getElementById('form-name').value = draft.name || document.getElementById('form-name').value;
+    document.getElementById('form-personality').value = draft.personality || '';
+    document.getElementById('form-texting-style').value = draft.texting_style || '';
+    document.getElementById('form-example-dialogue').value = draft.example_dialogue || '';
+    document.getElementById('form-pet-names').value = (draft.pet_names || []).join(', ');
+    document.getElementById('form-backstory').value = draft.backstory || '';
+    document.getElementById('form-relationship').value = draft.relationship_to_user || '';
+    document.getElementById('form-scenario').value = draft.scenario || '';
+    document.getElementById('form-sexual-personality').value = draft.sexual_personality || '';
+    document.getElementById('form-core-desires').value = draft.core_desires || '';
+    document.getElementById('form-turn-ons').value = (draft.turn_ons || []).join(', ');
+    document.getElementById('form-kinks').value = (draft.kinks || []).join(', ');
+    document.getElementById('form-limits').value = (draft.limits || []).join(', ');
+    document.getElementById('form-aftercare-style').value = draft.aftercare_style || '';
+    document.getElementById('form-first-message').value = draft.first_message || '';
+    document.getElementById('form-appearance').value = draft.appearance_prompt || '';
+  }
+
+  function renderPromptFlags(sections = {}, flags = {}) {
+    const container = document.getElementById('prompt-preview-flags');
+    const items = [
+      ['base', 'Base Persona', sections.base],
+      ['limits', 'Limits', sections.limits],
+      ['exampleDialogue', 'Example Dialogue', sections.exampleDialogue],
+      ['backstory', 'Backstory', sections.backstory || flags.includeBackstory],
+      ['adult', 'Adult Context', sections.adult || flags.adultContext],
+      ['devicePhaseStyle', 'Device Style', sections.devicePhaseStyle],
+    ];
+
+    container.innerHTML = '';
+    for (const [, label, active] of items) {
+      const pill = document.createElement('span');
+      pill.className = `prompt-flag${active ? ' active' : ''}`;
+      pill.textContent = label;
+      container.appendChild(pill);
+    }
+  }
+
+  async function refreshPromptPreview() {
+    if (!editingSlug) return;
+
+    const phase = document.getElementById('prompt-phase-select').value;
+    const sampleMessage = document.getElementById('prompt-sample-message').value.trim();
+    const output = document.getElementById('prompt-preview-output');
+    const refreshBtn = document.getElementById('btn-prompt-refresh');
+    const originalLabel = refreshBtn.textContent;
+
+    output.value = 'Loading prompt preview...';
+    refreshBtn.disabled = true;
+    refreshBtn.textContent = 'Refreshing...';
+
+    try {
+      const res = await fetch('/api/admin/prompt-preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slug: editingSlug,
+          phase,
+          sample_user_message: sampleMessage,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to load prompt preview');
+
+      output.value = data.prompt || '';
+      renderPromptFlags(data.sections || {}, data.flags || {});
+    } catch (err) {
+      output.value = `Error loading prompt preview: ${err.message}`;
+      document.getElementById('prompt-preview-flags').innerHTML = '';
+    } finally {
+      refreshBtn.disabled = false;
+      refreshBtn.textContent = originalLabel;
+    }
   }
 
   // ── Model Test ───────────────────────────────────────────────
@@ -353,6 +584,52 @@ const Settings = (() => {
     btn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><polygon points="5,3 19,12 5,21"/></svg> Run Test';
   }
 
+  async function generateCharacterDraft(conceptPrompt) {
+    const model = document.getElementById('form-model').value.trim();
+    const seed = collectDraftSeed();
+    if (!seed.name) { alert('Enter a character name first.'); return; }
+    if (!model) { alert('Select a model first.'); return; }
+    if (!conceptPrompt?.trim()) { alert('Give it a one-line concept first.'); return; }
+
+    const hasExistingContent = Object.entries(seed).some(([key, value]) => key !== 'name' && value);
+    if (hasExistingContent && !confirm('Generate a full cohesive draft from the current inputs? This will replace the form text fields.')) {
+      return;
+    }
+
+    closeDraftModal();
+
+    const overlay = document.getElementById('form-saving');
+    const overlayLabel = document.querySelector('#form-saving .saving-label');
+    const generateBtn = document.getElementById('btn-generate-draft');
+    const originalLabel = overlayLabel.textContent;
+    const originalButton = generateBtn.innerHTML;
+
+    overlay.classList.remove('hidden');
+    overlayLabel.textContent = 'Generating draft...';
+    generateBtn.disabled = true;
+    generateBtn.classList.add('running');
+    generateBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M12 3v6"/><path d="M12 15v6"/><path d="M3 12h6"/><path d="M15 12h6"/><path d="M5.64 5.64l4.24 4.24"/><path d="M14.12 14.12l4.24 4.24"/><path d="M18.36 5.64l-4.24 4.24"/><path d="M9.88 14.12l-4.24 4.24"/></svg> Generating...';
+
+    try {
+      const res = await fetch('/api/admin/generate-character-draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, seed, concept_prompt: conceptPrompt.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Generation failed');
+      applyGeneratedDraft(data.draft || {});
+    } catch (err) {
+      alert(`Draft generation failed: ${err.message}`);
+    } finally {
+      overlay.classList.add('hidden');
+      overlayLabel.textContent = originalLabel;
+      generateBtn.disabled = false;
+      generateBtn.classList.remove('running');
+      generateBtn.innerHTML = originalButton;
+    }
+  }
+
   // ── Save ─────────────────────────────────────────────────────
 
   async function saveForm() {
@@ -372,7 +649,17 @@ const Settings = (() => {
       fd.append('model', model);
       fd.append('personality', document.getElementById('form-personality').value.trim());
       fd.append('texting_style', document.getElementById('form-texting-style').value.trim());
+      fd.append('example_dialogue', document.getElementById('form-example-dialogue').value.trim());
+      fd.append('pet_names', document.getElementById('form-pet-names').value.trim());
+      fd.append('backstory', document.getElementById('form-backstory').value.trim());
+      fd.append('relationship_to_user', document.getElementById('form-relationship').value.trim());
       fd.append('scenario', document.getElementById('form-scenario').value.trim());
+      fd.append('sexual_personality', document.getElementById('form-sexual-personality').value.trim());
+      fd.append('core_desires', document.getElementById('form-core-desires').value.trim());
+      fd.append('turn_ons', document.getElementById('form-turn-ons').value.trim());
+      fd.append('kinks', document.getElementById('form-kinks').value.trim());
+      fd.append('limits', document.getElementById('form-limits').value.trim());
+      fd.append('aftercare_style', document.getElementById('form-aftercare-style').value.trim());
       fd.append('first_message', document.getElementById('form-first-message').value.trim());
       fd.append('appearance_prompt', document.getElementById('form-appearance').value.trim());
 
@@ -426,12 +713,42 @@ const Settings = (() => {
     document.getElementById('btn-settings').addEventListener('click', openSettings);
     document.getElementById('btn-settings-back').addEventListener('click', closeSettings);
     document.getElementById('btn-new-character').addEventListener('click', () => openForm(null));
+    document.getElementById('btn-comfyui-refresh').addEventListener('click', () => loadComfyUiSettings(true));
+    document.getElementById('btn-comfyui-save').addEventListener('click', saveComfyUiSettings);
     document.getElementById('btn-form-back').addEventListener('click', closeForm);
     document.getElementById('btn-form-save').addEventListener('click', saveForm);
     document.getElementById('btn-delete-char').addEventListener('click', deleteCharacter);
 
     initModelPicker();
     document.getElementById('btn-run-test').addEventListener('click', runModelTest);
+    document.getElementById('btn-prompt-preview').addEventListener('click', openPromptModal);
+    document.getElementById('btn-generate-draft').addEventListener('click', openDraftModal);
+    document.getElementById('btn-draft-modal-close').addEventListener('click', closeDraftModal);
+    document.getElementById('btn-draft-modal-cancel').addEventListener('click', closeDraftModal);
+    document.getElementById('btn-draft-modal-generate').addEventListener('click', () => {
+      generateCharacterDraft(document.getElementById('draft-prompt-input').value);
+    });
+    draftModal.addEventListener('click', e => {
+      if (e.target === draftModal) closeDraftModal();
+    });
+    document.getElementById('draft-prompt-input').addEventListener('keydown', e => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        e.preventDefault();
+        generateCharacterDraft(e.target.value);
+      }
+    });
+    document.getElementById('btn-prompt-modal-close').addEventListener('click', closePromptModal);
+    document.getElementById('btn-prompt-refresh').addEventListener('click', refreshPromptPreview);
+    document.getElementById('btn-prompt-copy').addEventListener('click', async () => {
+      const text = document.getElementById('prompt-preview-output').value;
+      if (!text) return;
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch (_) {}
+    });
+    promptModal.addEventListener('click', e => {
+      if (e.target === promptModal) closePromptModal();
+    });
 
     ['portrait', 'fullbody'].forEach(type => {
       const input = document.getElementById(`input-${type}`);

@@ -11,7 +11,8 @@ services:
     environment:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - COMFYUI_BASE_URL=${COMFYUI_BASE_URL:-http://host.docker.internal:8188}
-      - INTIFACE_WS_URL=${INTIFACE_WS_URL:-ws://host.docker.internal:12345}
+      - LOVENSE_DEVELOPER_TOKEN=${LOVENSE_DEVELOPER_TOKEN}
+      - LOVENSE_PLATFORM_NAME=${LOVENSE_PLATFORM_NAME:-xMessage}
       - WHISPER_API_URL=${WHISPER_API_URL:-http://host.docker.internal:8000}
       - PORT=3000
     extra_hosts:

@@ -1,401 +1,222 @@
 # xMessage
 
-Personal AI character texting app. iMessage aesthetic. Runs on Unraid, accessed on iPhone via Tailscale.
-
-**GitHub**: https://github.com/Bigrg02/xmessenger (private)
-
----
+Personal AI character texting app with an iMessage-style UI, OpenRouter-backed chat, optional image generation, and Lovense-controlled device mode.
 
 ## What It Does
 
-- Opens to a character list that looks exactly like iOS Messages
-- Tap a character to open a conversation — chat bubbles, typing indicator, timestamps
-- LLM (via OpenRouter) responds as the character in structured JSON that drives all side effects
-- Async image generation via ComfyUI — images arrive in the thread when ready
-- Device control via Intiface Central — vibration intensity maps to conversation tone
-- Phase handover: conversation can transition to a device-control mode with push-to-talk voice input
-- Audio clips play from per-character libraries based on the moment
-- Emergency STOP button always visible; also triggered by Escape key
-
----
+- Character list styled like iOS Messages
+- Persistent chat sessions stored in SQLite
+- Structured JSON LLM responses that drive text, audio, images, and toy control
+- Adult-profile-led personality, where `core_desires` shape relationship tone and `turn_ons` / `kinks` influence warm or explicit scenes
+- Async image generation through ComfyUI
+- Push-to-talk voice input in device mode through Whisper
+- Lovense pairing flow inside the chat UI, with QR linking through Lovense Remote or Lovense Connect
+- Guided autonomy so the character can control linked toys within live caps and manual overrides
+- One shared ComfyUI workflow for all characters, with per-character `appearance_prompt` data
 
 ## Stack
 
-- **Backend**: Node.js + Express
-- **Database**: SQLite (better-sqlite3)
-- **Frontend**: Vanilla JS, mobile-first CSS (no frameworks)
-- **LLM**: OpenRouter API (model configurable per character)
-- **Images**: ComfyUI (async, character workflow per card)
-- **Devices**: Intiface Central via raw WebSocket (Buttplug protocol)
-- **STT**: faster-whisper-server (OpenAI-compatible API)
-- **Deployment**: Docker on Unraid
+- Backend: Node.js + Express
+- Database: SQLite via `better-sqlite3`
+- Frontend: vanilla JS + mobile-first CSS
+- LLM: OpenRouter
+- Images: ComfyUI
+- Voice input: faster-whisper-server
+- Toy integration: Lovense Web API + Lovense Remote/Connect
+- Deployment: Docker / Unraid-friendly
 
----
+## Requirements
 
-## Prerequisites
+Required:
 
-These services need to be running (on the same machine or reachable on your network):
+- Node.js 20+
+- `OPENROUTER_API_KEY`
 
-| Service | Default URL | Purpose |
-|---|---|---|
-| [Intiface Central](https://intiface.com/central/) | `ws://localhost:12345` | Device control (Edge 2, Gush 2) |
-| [ComfyUI](https://github.com/comfyanonymous/ComfyUI) | `http://localhost:8188` | Image generation |
-| [faster-whisper-server](https://github.com/fedirz/faster-whisper-server) | `http://localhost:8000` | Speech-to-text (push-to-talk) |
-| [OpenRouter](https://openrouter.ai) | API key in `.env` | LLM backend |
+Optional but supported:
 
-xMessage runs fine without any of these — it degrades gracefully:
-- No Intiface → device features disabled, everything else works
-- No ComfyUI → no image generation, conversation continues
-- No Whisper → PTT button doesn't appear, text input still works
-- No OpenRouter key → messages send but get an error response
+- [ComfyUI](https://github.com/comfyanonymous/ComfyUI) at `http://localhost:8188`
+- [faster-whisper-server](https://github.com/fedirz/faster-whisper-server) at `http://localhost:8000`
+- [Lovense Remote](https://www.lovense.com/remote) or Lovense Connect for toy pairing
+- `LOVENSE_DEVELOPER_TOKEN` for the Lovense web pairing flow
 
----
+The app degrades gracefully:
 
-## Running Locally
+- No Lovense token or app: chat works, toy features stay unavailable
+- No ComfyUI: chat works, image generation is skipped
+- No Whisper: text chat still works, push-to-talk stays hidden
+
+## Local Setup
 
 ```bash
 git clone https://github.com/Bigrg02/xmessenger.git
 cd xmessenger
-
 npm install
-
 cp .env.example .env
-# Edit .env — at minimum set OPENROUTER_API_KEY
+```
 
-node scripts/build-character.js --name "YourCharacter"
-# Fill in characters/yourcharacter/card.json
+Set at least:
 
+```env
+OPENROUTER_API_KEY=sk-or-v1-...
+```
+
+If you want Lovense control, also set:
+
+```env
+LOVENSE_DEVELOPER_TOKEN=your-lovense-developer-token
+LOVENSE_PLATFORM_NAME=xMessage
+```
+
+Then run:
+
+```bash
 npm start
-# → http://localhost:3000
 ```
 
-Open in any browser. On your phone (same WiFi), go to `http://YOUR_PC_IP:3000`.
+Open [http://localhost:3000](http://localhost:3000).
 
----
+## Lovense Flow
 
-## Deploying to Unraid
+This build no longer uses Intiface.
 
-### Step 1 — SSH into Unraid and clone the repo
+Toy setup is now:
 
-```bash
-cd /mnt/user/appdata
-git clone https://github.com/Bigrg02/xmessenger.git xmessenger
-cd xmessenger
-```
+1. Open a chat.
+2. Tap `Toys`.
+3. Tap `Connect Lovense`.
+4. Scan the QR code from Lovense Remote or Lovense Connect.
+5. When toys appear, assign a body zone and leave them armed.
+6. Enter device mode so the character can drive structured toy actions.
 
-### Step 2 — Create your .env
+Important current behavior:
 
-```bash
-cp .env.example .env
-nano .env
-```
+- Linking is QR-based and the app polls Lovense for linked-app and toy state after scan.
+- Manual slider control is working and now sends long-running commands instead of 3-second bursts.
+- Character-led toy actions are still gated by actual device mode. If the session has not entered device mode yet, the control sheet can be linked and armed but still show setup-only text.
+- The backend now sends Lovense commands directly over the LAN API. The browser Socket.IO path is still present for pairing and compatibility, but control no longer depends on it.
 
-Fill in your real values:
-```
-OPENROUTER_API_KEY=sk-or-v1-your-key-here
-COMFYUI_BASE_URL=http://YOUR_UNRAID_IP:8188
-INTIFACE_WS_URL=ws://YOUR_UNRAID_IP:12345
-WHISPER_API_URL=http://YOUR_UNRAID_IP:8000
+The app keeps full manual control available:
+
+- Global intensity cap
+- Per-toy cap
+- Arm/disarm per toy
+- Manual level slider
+- Pause character control
+- Emergency stop
+
+## Docker Notes
+
+The app container does not need direct toy hardware access.
+
+Use Lovense Remote/Connect outside the container, and give the container:
+
+```env
+OPENROUTER_API_KEY=...
+COMFYUI_BASE_URL=http://host.docker.internal:8188
+WHISPER_API_URL=http://host.docker.internal:8000
+LOVENSE_DEVELOPER_TOKEN=...
+LOVENSE_PLATFORM_NAME=xMessage
 PORT=3000
 ```
 
-> Use your Unraid server's LAN IP (e.g. `192.168.1.x`) for the service URLs, not `localhost` — the Docker container can't reach `localhost` on the host.
-
-### Step 3 — Build the Docker image
+Example:
 
 ```bash
-docker build -t xmessenger:latest .
+docker compose up -d --build
 ```
 
-This takes 2–4 minutes the first time (compiles native SQLite module).
+## Character Files
 
-### Step 4 — Add as an Unraid Docker container (UI method)
+Each character lives in `characters/<slug>/` and usually includes:
 
-1. Unraid UI → **Docker** tab → **Add Container**
-2. Fill in these fields:
+- `card.json`
+- `reference.png`
+- optional `reference_full.png`
+- optional `audio/<category>/...`
 
-   | Field | Value |
-   |---|---|
-   | Name | `xmessenger` |
-   | Repository | `xmessenger:latest` |
-   | Network Type | `Bridge` |
-   | Extra Parameters | `--add-host=host.docker.internal:host-gateway` |
+Important card fields:
 
-3. Click **Add another Path, Port, Variable, Label or Device** for each of these:
+- `name`
+- `avatar`
+- `model`
+- `personality`
+- `texting_style`
+- `scenario`
+- `first_message`
+- `appearance_prompt`
+- `accent_color`
 
-   **Ports:**
-   | Config Type | Name | Host Port | Container Port |
-   |---|---|---|---|
-   | Port | Web UI | 3000 | 3000 |
+The app also supports expanded adult-profile fields such as `backstory`, `relationship_to_user`, `sexual_personality`, `turn_ons`, `kinks`, `limits`, `aftercare_style`, and `example_dialogue`.
 
-   **Paths:**
-   | Config Type | Name | Host Path | Container Path |
-   |---|---|---|---|
-   | Path | Characters | `/mnt/user/appdata/xmessenger/characters` | `/app/characters` |
-   | Path | Data | `/mnt/user/appdata/xmessenger/data` | `/app/data` |
+## Character Tone Model
 
-   **Variables:**
-   | Config Type | Name | Key | Value |
-   |---|---|---|---|
-   | Variable | OpenRouter Key | `OPENROUTER_API_KEY` | your key |
-   | Variable | ComfyUI URL | `COMFYUI_BASE_URL` | `http://YOUR_UNRAID_IP:8188` |
-   | Variable | Intiface URL | `INTIFACE_WS_URL` | `ws://YOUR_UNRAID_IP:12345` |
-   | Variable | Whisper URL | `WHISPER_API_URL` | `http://YOUR_UNRAID_IP:8000` |
+Character tone is no longer driven only by “was the recent chat explicit.” The runtime now separates:
 
-4. Click **Apply**
+- always-on relationship feel, led by `core_desires`
+- warm/explicit scene expression, influenced by `sexual_personality`, `turn_ons`, `kinks`, and `aftercare_style`
+- latest-turn intent, so real questions still get real answers even after a hot stretch
 
-### Step 4 (alternative) — Run directly with docker run
+In practice this means:
+
+- `core_desires` should shape the emotional feel of the relationship all the time
+- `turn_ons` and `kinks` show up more as recurring motifs in warm or explicit scenes
+- practical questions after explicit messages should still be answered directly, with only light chemistry layered in when appropriate
+- image and toy behavior now follow the same tone-routing logic instead of staying “hot forever”
+
+## Shared ComfyUI Workflow
+
+Image generation now uses one shared workflow file:
+
+- [workflows/comfyui/workflow.json](/C:/dev/Xmessenger/workflows/comfyui/workflow.json)
+
+The app injects each character's `appearance_prompt` plus the scene request into matching `CLIPTextEncode` nodes, and uploads the character reference image into the configured workflow image-loader node.
+
+ComfyUI bindings are now configurable from Settings:
+
+- `Prompt Node IDs`
+- `Reference Image Node IDs`
+- `Seed Node IDs`
+
+Those values should use the exported ComfyUI node IDs from your shared workflow. The workflow settings screen also shows a live list of titled nodes and IDs found in the current shared workflow so you can target them without editing code.
+If `Seed Node IDs` is left blank, xMessage will still try to auto-randomize common `seed` or `noise_seed` inputs it finds, so regenerate runs do not keep producing the same image.
+
+Backward compatibility:
+
+- If the shared workflow file is missing, the app still falls back to an old character-specific workflow path if one exists.
+- New character scaffolds no longer create per-character ComfyUI workflow folders by default.
+
+## Main API Surfaces
+
+- `GET /api/characters`
+- `POST /api/sessions`
+- `GET /api/sessions/:id/events`
+- `POST /api/sessions/:id/messages`
+- `POST /api/sessions/:id/messages/photo`
+- `GET /api/devices/status`
+- `POST /api/devices/lovense/pairing/start`
+- `GET /api/devices/lovense/pairing/apps`
+- `POST /api/devices/lovense/pairing/disconnect`
+- `GET /api/admin/comfyui-settings`
+- `PATCH /api/admin/comfyui-settings`
+
+## Development Notes
+
+- Device state is pushed to the frontend over SSE as `device_state`.
+- Toy commands are emitted as `device_command`, but the backend also sends Lovense LAN API commands directly so control does not depend on browser socket delivery.
+- The LLM still returns the same high-level JSON contract, with structured `toy_control` added for device-mode choreography.
+- The JSON parser in `llmClient` now extracts the first complete JSON object from model output so device-mode replies with trailing junk do not break chat.
+- Adult profile is now split internally into an always-on relationship desire layer and a warm/explicit scene escalation layer.
+- Automatic image sending is gated by the current turn’s inferred tone, so visual requests still trigger easily while normal-topic turns suppress stray photo sends.
+- Session reload now restores the newest 100 messages in chronological order rather than the oldest 100, so late-thread messages persist visibly after refresh.
+
+## Known Limits
+
+- The current toy panel is stable for linking and manual control, but character autonomy still depends on the chat session actually entering device mode.
+- We support structured action types like `pulse`, `ramp`, `hold`, and `alternate`, but we do not yet expose Lovense preset-pattern selection or downloadable pattern-library import in the UI.
+- Lovense app-library patterns are not currently imported directly. The next practical upgrade would be named presets plus custom pattern definitions stored in this app.
+
+## Tests
 
 ```bash
-docker run -d \
-  --name xmessenger \
-  --restart unless-stopped \
-  -p 3000:3000 \
-  --env-file /mnt/user/appdata/xmessenger/.env \
-  -v /mnt/user/appdata/xmessenger/characters:/app/characters \
-  -v /mnt/user/appdata/xmessenger/data:/app/data \
-  --add-host=host.docker.internal:host-gateway \
-  xmessenger:latest
-```
-
-### Step 5 — Copy your characters over
-
-```bash
-# From your PC, copy the characters folder to Unraid via SCP:
-scp -r ./characters/yourcharacter root@UNRAID_IP:/mnt/user/appdata/xmessenger/characters/
-
-# Or map a share in Windows Explorer and drag/drop:
-# \\UNRAID_IP\appdata\xmessenger\characters\
-```
-
----
-
-## Updating (after pushing changes from your PC)
-
-```bash
-# On your PC — make changes, then:
-git add -A && git commit -m "your changes"
-git push
-
-# On Unraid (SSH):
-cd /mnt/user/appdata/xmessenger
-git pull
-docker build -t xmessenger:latest .
-docker restart xmessenger
-```
-
-Takes about 60 seconds total after the first build (layer caching).
-
----
-
-## Accessing on iPhone via Tailscale
-
-1. Install [Tailscale](https://tailscale.com/) on your Unraid server and your iPhone
-2. Log in to the same Tailscale account on both
-3. On iPhone, open Safari → `http://UNRAID-TAILSCALE-IP:3000`
-4. Tap **Share → Add to Home Screen** — it will behave like a native app
-
-> **Tip**: Enable MagicDNS in the Tailscale admin console so you can use a hostname like `http://unraid:3000` instead of the IP.
-
----
-
-## Creating a Character
-
-```bash
-node scripts/build-character.js --name "Sara" --images ./reference-photos/
-```
-
-Creates `characters/sara/` with the full directory structure. Then edit `characters/sara/card.json`:
-
-```json
-{
-  "name": "Sara",
-  "avatar": "reference.png",
-  "accent_color": "#ff6b9d",
-  "model": "openai/gpt-4o",
-  "personality": "...",
-  "texting_style": "...",
-  "scenario": "...",
-  "first_message": "...",
-  "appearance_prompt": "ComfyUI positive prompt describing her appearance",
-  "comfyui_workflow": "comfyui/workflow.json",
-  "device_phase_style": "Short reactive texts only, max 6 words."
-}
-```
-
-**Required fields:**
-- `personality` — who she is, how she relates to the user, specific traits
-- `texting_style` — sentence length, emoji use, punctuation habits, energy
-- `scenario` — current situation, relationship context
-- `first_message` — her opening text when a new conversation starts
-- `appearance_prompt` — ComfyUI prompt for image generation (describe her appearance)
-- `model` — OpenRouter model ID (run the model tester first)
-- `accent_color` — hex color used for her chat bubbles
-
-**Audio clips** — drop MP3/WAV files into `characters/sara/audio/{category}/`. See `characters/sara/audio/README.md` for what goes in each folder.
-
-**ComfyUI workflow** — export your workflow from ComfyUI as API format (Workflow menu → Export API), replace `characters/sara/comfyui/workflow.json`. The app injects the character's `appearance_prompt` + scene description into any `CLIPTextEncode` node whose title contains "positive" or "prompt".
-
----
-
-## Testing Models
-
-Before your first real session, find out which OpenRouter model works best:
-
-```bash
-node scripts/test-models.js --models "openai/gpt-4o,anthropic/claude-3-haiku-20240307,mistralai/mistral-7b-instruct"
-```
-
-Sends 3 escalating prompts to each model, scores them on:
-- **JSON compliance** (1–5) — critical, the whole system depends on this
-- **Quality** (1–5)
-- **Disclaimer count** — how often it refuses or adds warnings
-
-Saves full results to `test-results.json`.
-
----
-
-## How the LLM Response Works
-
-Every message from the character must be valid JSON:
-
-```json
-{
-  "message": "her text here",
-  "image_request": { "send": false, "scene": "" },
-  "device_intent": "neutral",
-  "audio_category": "none",
-  "phase_trigger": null
-}
-```
-
-| Field | Options | Effect |
-|---|---|---|
-| `device_intent` | `neutral` `teasing` `building` `intense` `cooling` | Sets vibration intensity |
-| `audio_category` | `encouragement` `reactive` `checking_in` `edging` `climax` `aftercare` `none` | Plays random clip from that folder |
-| `image_request.send` | `true` / `false` | Triggers async ComfyUI generation |
-| `phase_trigger` | `"handover"` / `null` | Transitions to device phase |
-
----
-
-## Device Intensity Map
-
-| Intent | Edge 2 | Gush 2 |
-|---|---|---|
-| `neutral` | 20% | 15% |
-| `teasing` | 35% | 30% |
-| `building` | 55% | 50% |
-| `intense` | 80% | 75% |
-| `cooling` | 10% | 10% |
-
-Transitions are smoothed over 3 seconds. The STOP button (or Escape key) immediately zeros both devices.
-
----
-
-## Voice Commands (Device Phase)
-
-During device phase, voice input is processed for intent *before* the LLM call so devices respond immediately:
-
-| You say | Effect |
-|---|---|
-| "more", "harder", "up" | +15% intensity on both |
-| "less", "softer", "down" | −15% intensity on both |
-| "cock", "front" | target Gush 2 specifically |
-| "ass", "plug", "back" | target Edge 2 specifically |
-| "stop", "pause" | immediate stop |
-| "too much", "too intense" | switch to cooling intent |
-| "close", "so close" | no device change (LLM reacts) |
-
----
-
-## Environment Variables
-
-| Variable | Default | Description |
-|---|---|---|
-| `OPENROUTER_API_KEY` | **required** | From openrouter.ai |
-| `COMFYUI_BASE_URL` | `http://localhost:8188` | ComfyUI server |
-| `INTIFACE_WS_URL` | `ws://localhost:12345` | Intiface Central |
-| `WHISPER_API_URL` | `http://localhost:8000` | faster-whisper server |
-| `PORT` | `3000` | App port |
-
----
-
-## Troubleshooting
-
-**Intiface not connecting**
-- Open Intiface Central and make sure the server is started (green Start button)
-- Default port is 12345 — confirm it matches `INTIFACE_WS_URL`
-- From Docker, use `ws://host.docker.internal:12345` not `ws://localhost:12345`
-- xMessage retries every 15 seconds — watch server logs for `[devices]` lines
-
-**ComfyUI not generating images**
-- Images are async and can take up to 3 minutes — check `[images]` in server logs
-- Workflow must be exported as **API format** from ComfyUI (not the default export)
-- Confirm your workflow has a `CLIPTextEncode` node with "positive" or "prompt" in its title
-- Test ComfyUI directly at `http://YOUR_IP:8188` to confirm it's reachable
-
-**Whisper / PTT not working**
-- PTT only appears in device phase — it won't show during normal text chat
-- Test Whisper: `curl -X POST http://localhost:8000/v1/audio/transcriptions -F file=@test.mp3 -F model=whisper-1`
-- Browser must have microphone permission — tap Allow when prompted
-
-**No LLM response / messages stuck**
-- Check `OPENROUTER_API_KEY` is correct and has credits at openrouter.ai
-- The `model` field in `card.json` must be a valid OpenRouter model ID
-- Run `node scripts/test-models.js` to confirm a model works before using it in a session
-
-**Character not showing in list**
-- `characters/{name}/card.json` must exist and be valid JSON
-- All required fields must be present: `name`, `avatar`, `model`, `personality`, `first_message`
-- Restart the server after adding a new character
-
-**Docker can't reach Intiface/ComfyUI/Whisper**
-- Add `--add-host=host.docker.internal:host-gateway` to your docker run command
-- Use `host.docker.internal` instead of `localhost` in all service URLs in `.env`
-
----
-
-## Project Structure
-
-```
-xmessenger/
-├── server.js                    # Entry point
-├── src/
-│   ├── db/index.js              # SQLite schema + all queries
-│   ├── modules/
-│   │   ├── llmClient.js         # OpenRouter API, prompt building, JSON parsing
-│   │   ├── sessionManager.js    # Context window, summarization trigger
-│   │   ├── deviceManager.js     # Intiface WebSocket, smooth transitions, stop
-│   │   ├── imageGenerator.js    # ComfyUI submit → poll → download → serve
-│   │   ├── audioManager.js      # Random clip selection, no-repeat logic
-│   │   ├── intentDetector.js    # Voice command parsing (no LLM needed)
-│   │   └── sseManager.js        # Server-sent events registry
-│   └── routes/
-│       ├── characters.js        # GET /api/characters, /api/characters/:name/card
-│       ├── sessions.js          # POST/GET /api/sessions
-│       ├── messages.js          # POST /api/sessions/:id/messages + SSE stream
-│       ├── devices.js           # POST /api/devices/stop, /intent
-│       ├── audio.js             # GET /api/audio/:character/:category/random
-│       └── stt.js               # POST /api/stt (Whisper proxy)
-├── public/
-│   ├── index.html               # Single-page app shell
-│   ├── css/styles.css           # iMessage aesthetic, dark mode, safe areas
-│   └── js/
-│       ├── app.js               # Screen routing, character list, SSE client
-│       ├── chat.js              # Bubble rendering, send logic, phase UI
-│       └── ptt.js               # MediaRecorder, hold-to-talk, Whisper upload
-├── characters/{name}/
-│   ├── card.json                # Character definition
-│   ├── reference.png            # Avatar image
-│   ├── audio/{category}/*.mp3   # Pre-baked audio clips
-│   └── comfyui/workflow.json    # ComfyUI API-format workflow
-├── scripts/
-│   ├── build-character.js       # Scaffolds a new character directory
-│   └── test-models.js           # Benchmarks OpenRouter models
-├── data/                        # Runtime data (gitignored)
-│   ├── xmessenger.db            # SQLite database
-│   └── images/                  # Generated images served to frontend
-├── Dockerfile
-├── docker-compose.yml
-└── .env.example
+npm test
 ```

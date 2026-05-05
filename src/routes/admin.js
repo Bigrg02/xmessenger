@@ -4,6 +4,9 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
+const { normalizeCard, normalizeGeneratedDraft, splitList } = require('../modules/characterCard');
+const llmClient = require('../modules/llmClient');
+const comfyuiSettings = require('../modules/comfyuiSettings');
 
 // Cache model list for 5 minutes
 let modelsCache = null;
@@ -39,6 +42,26 @@ router.get('/models', async (req, res) => {
   }
 });
 
+router.get('/comfyui-settings', (req, res) => {
+  res.json({
+    settings: comfyuiSettings.readSettings(),
+    workflow_nodes: comfyuiSettings.listWorkflowNodes(),
+  });
+});
+
+router.patch('/comfyui-settings', (req, res) => {
+  try {
+    const settings = comfyuiSettings.writeSettings(req.body || {});
+    res.json({
+      ok: true,
+      settings,
+      workflow_nodes: comfyuiSettings.listWorkflowNodes(),
+    });
+  } catch (err) {
+    res.status(400).json({ error: err.message || 'Failed to save ComfyUI settings' });
+  }
+});
+
 const CHARS_DIR = path.join(__dirname, '../../characters');
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
@@ -56,13 +79,125 @@ function ensureCharDirs(slug) {
 function readCard(slug) {
   const p = path.join(CHARS_DIR, slug, 'card.json');
   if (!fs.existsSync(p)) return null;
-  try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return null; }
+  try { return normalizeCard(JSON.parse(fs.readFileSync(p, 'utf8'))); } catch { return null; }
 }
 
 function writeCard(slug, card) {
   const dir = path.join(CHARS_DIR, slug);
   fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, 'card.json'), JSON.stringify(card, null, 2));
+  fs.writeFileSync(path.join(dir, 'card.json'), JSON.stringify(normalizeCard(card), null, 2));
+}
+
+function fieldValue(body, key, fallback = '') {
+  return Object.prototype.hasOwnProperty.call(body, key) ? body[key] : fallback;
+}
+
+function parseJsonObject(raw) {
+  if (!raw || !raw.trim()) throw new Error('Empty response from model');
+
+  let text = raw.trim();
+  text = text.replace(/^```json\s*/im, '').replace(/^```\s*/im, '').replace(/```\s*$/m, '');
+
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if (start === -1 || end === -1) {
+    throw new Error('No JSON found in response');
+  }
+
+  return JSON.parse(text.slice(start, end + 1));
+}
+
+function buildDraftPrompt(seed, conceptPrompt = '') {
+  return `Create one cohesive adult relationship chat character sheet for a texting roleplay app.
+
+Use any provided seed details as canon. Extend them, but do not contradict them.
+Do not treat each field as random or separate. Everything should feel like the same person, relationship, and sexual dynamic.
+The result should feel grounded, intimate, and internally consistent.
+
+Write for an adult modern texting app, not fantasy lore.
+Keep the voice natural and specific.
+Pet names, turn-ons, kinks, and limits should be short phrases.
+Example dialogue should be a few short lines that sound like her actual texting voice.
+First message should be a single believable opener.
+Appearance prompt should describe her visual look clearly for image generation.
+
+Primary one-line concept:
+${conceptPrompt || 'Use the seed details below as the main direction.'}
+
+Return only valid JSON with exactly these fields:
+{
+  "name": "",
+  "personality": "",
+  "texting_style": "",
+  "example_dialogue": "",
+  "pet_names": [],
+  "backstory": "",
+  "relationship_to_user": "",
+  "scenario": "",
+  "sexual_personality": "",
+  "core_desires": "",
+  "turn_ons": [],
+  "kinks": [],
+  "limits": [],
+  "aftercare_style": "",
+  "first_message": "",
+  "appearance_prompt": ""
+}
+
+Seed details:
+${JSON.stringify(seed, null, 2)}`;
+}
+
+async function generateCharacterDraft(model, seed, conceptPrompt) {
+  const system = 'You are a character designer for an adult AI texting app. You produce cohesive, internally consistent character sheets in strict JSON.';
+  const user = buildDraftPrompt(seed, conceptPrompt);
+
+  const request = {
+    model,
+    messages: [
+      { role: 'system', content: system },
+      { role: 'user', content: user },
+    ],
+    temperature: 0.85,
+    max_tokens: 1600,
+  };
+
+  const headers = {
+    Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+    'HTTP-Referer': 'http://localhost:3000',
+    'X-Title': 'xMessage',
+    'Content-Type': 'application/json',
+  };
+
+  let raw = '';
+  try {
+    const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', request, {
+      headers,
+      timeout: 60000,
+    });
+    raw = response.data.choices?.[0]?.message?.content ?? '';
+    return normalizeGeneratedDraft(parseJsonObject(raw));
+  } catch (err) {
+    try {
+      const retryResponse = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
+        ...request,
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: user },
+          ...(raw ? [{ role: 'assistant', content: raw }] : []),
+          { role: 'user', content: 'Your last response was invalid. Return only one valid JSON object with exactly the requested fields.' },
+        ],
+      }, {
+        headers,
+        timeout: 60000,
+      });
+      const retryRaw = retryResponse.data.choices?.[0]?.message?.content ?? '';
+      return normalizeGeneratedDraft(parseJsonObject(retryRaw));
+    } catch (retryErr) {
+      const msg = retryErr.response?.data?.error?.message || err.response?.data?.error?.message || retryErr.message || err.message;
+      throw new Error(msg);
+    }
+  }
 }
 
 // POST /api/admin/test-model — fire a single prompt and return the raw response
@@ -94,6 +229,55 @@ router.post('/test-model', async (req, res) => {
   } catch (err) {
     const msg = err.response?.data?.error?.message || err.message;
     res.json({ error: msg });
+  }
+});
+
+// POST /api/admin/generate-character-draft - fill the form coherently from one model pass
+router.post('/generate-character-draft', async (req, res) => {
+  const { model, seed = {}, concept_prompt = '' } = req.body || {};
+  if (!model) return res.status(400).json({ error: 'model required' });
+
+  const normalizedSeed = normalizeGeneratedDraft(seed);
+  if (!normalizedSeed.name) return res.status(400).json({ error: 'name required' });
+  if (!String(concept_prompt || '').trim()) return res.status(400).json({ error: 'concept_prompt required' });
+
+  try {
+    const draft = await generateCharacterDraft(model, normalizedSeed, String(concept_prompt).trim());
+    draft.name = normalizedSeed.name;
+    res.json({ draft });
+  } catch (err) {
+    console.error('[admin] draft generation failed:', err.message);
+    res.status(502).json({ error: err.message || 'Failed to generate character draft' });
+  }
+});
+
+// POST /api/admin/prompt-preview - inspect assembled chat prompt for a character
+router.post('/prompt-preview', (req, res) => {
+  const { slug, phase = 'text', sample_user_message = '' } = req.body || {};
+  if (!slug) return res.status(400).json({ error: 'slug required' });
+
+  const card = readCard(String(slug).toLowerCase());
+  if (!card) return res.status(404).json({ error: 'Character not found' });
+
+  const normalizedPhase = phase === 'device' ? 'device' : 'text';
+  const sampleUserMessage = String(sample_user_message || '').trim() || 'hey, how is your day going?';
+
+  try {
+    const preview = llmClient.buildPromptPreview(card, [], sampleUserMessage, {
+      phase: normalizedPhase,
+    });
+
+    res.json({
+      prompt: preview.prompt,
+      flags: preview.flags,
+      sections: preview.sections,
+      sample_user_message: sampleUserMessage,
+      phase: normalizedPhase,
+      character_name: card.name,
+    });
+  } catch (err) {
+    console.error('[admin] prompt preview failed:', err.message);
+    res.status(500).json({ error: 'Failed to build prompt preview' });
   }
 });
 
@@ -183,25 +367,34 @@ function buildCard(name, slug, body, files, existing = {}) {
   const hasPortrait = !!(files.portrait?.[0] || fs.existsSync(path.join(CHARS_DIR, slug, 'reference.png')));
   const hasFullbody = !!(files.fullbody?.[0] || fs.existsSync(path.join(CHARS_DIR, slug, 'reference_full.png')));
 
-  return {
+  return normalizeCard({
     name: name.trim(),
     avatar: 'reference.png',
     reference_portrait: hasPortrait ? 'reference.png' : (existing.reference_portrait || 'reference.png'),
     reference_fullbody: hasFullbody ? 'reference_full.png' : (existing.reference_fullbody || null),
-    accent_color: body.accent_color || existing.accent_color || '#ff6b9d',
-    model: body.model || existing.model || 'openai/gpt-4o',
-    personality: body.personality || existing.personality || '',
-    texting_style: body.texting_style || existing.texting_style || '',
-    scenario: body.scenario || existing.scenario || '',
-    first_message: body.first_message || existing.first_message || '',
-    appearance_prompt: body.appearance_prompt || existing.appearance_prompt || '',
-    comfyui_workflow: existing.comfyui_workflow || 'comfyui/workflow.json',
+    accent_color: fieldValue(body, 'accent_color', existing.accent_color || '#ff6b9d'),
+    model: fieldValue(body, 'model', existing.model || 'openai/gpt-4o'),
+    personality: fieldValue(body, 'personality', existing.personality || ''),
+    texting_style: fieldValue(body, 'texting_style', existing.texting_style || ''),
+    scenario: fieldValue(body, 'scenario', existing.scenario || ''),
+    backstory: fieldValue(body, 'backstory', existing.backstory || ''),
+    relationship_to_user: fieldValue(body, 'relationship_to_user', existing.relationship_to_user || ''),
+    core_desires: fieldValue(body, 'core_desires', existing.core_desires || ''),
+    sexual_personality: fieldValue(body, 'sexual_personality', existing.sexual_personality || ''),
+    aftercare_style: fieldValue(body, 'aftercare_style', existing.aftercare_style || ''),
+    example_dialogue: fieldValue(body, 'example_dialogue', existing.example_dialogue || ''),
+    pet_names: splitList(fieldValue(body, 'pet_names', existing.pet_names)),
+    turn_ons: splitList(fieldValue(body, 'turn_ons', existing.turn_ons)),
+    kinks: splitList(fieldValue(body, 'kinks', existing.kinks)),
+    limits: splitList(fieldValue(body, 'limits', existing.limits)),
+    first_message: fieldValue(body, 'first_message', existing.first_message || ''),
+    appearance_prompt: fieldValue(body, 'appearance_prompt', existing.appearance_prompt || ''),
     audio_library: existing.audio_library || {
       encouragement: [], reactive: [], checking_in: [],
       edging: [], climax: [], aftercare: [],
     },
-    device_phase_style: body.device_phase_style || existing.device_phase_style || 'Short reactive texts only, max 6 words.',
-  };
+    device_phase_style: fieldValue(body, 'device_phase_style', existing.device_phase_style || 'Short reactive texts only, max 6 words.'),
+  });
 }
 
 module.exports = router;

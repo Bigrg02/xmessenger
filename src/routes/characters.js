@@ -3,6 +3,7 @@ const router = express.Router();
 const fs = require('fs');
 const path = require('path');
 const db = require('../db');
+const { normalizeCard } = require('../modules/characterCard');
 
 const CHARS_DIR = path.join(__dirname, '../../characters');
 
@@ -10,7 +11,7 @@ function loadCard(name) {
   const cardPath = path.join(CHARS_DIR, name, 'card.json');
   if (!fs.existsSync(cardPath)) return null;
   try {
-    return JSON.parse(fs.readFileSync(cardPath, 'utf8'));
+    return normalizeCard(JSON.parse(fs.readFileSync(cardPath, 'utf8')));
   } catch (_) {
     return null;
   }

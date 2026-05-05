@@ -2,8 +2,8 @@
 // Runs BEFORE the LLM call so devices respond immediately.
 
 const BODY_TARGETS = [
-  [/\b(cock|dick|front|clit|pussy)\b/i, 'gush2'],
-  [/\b(ass|butt|back|plug|prostate)\b/i, 'edge2'],
+  [/\b(cock|dick|front|clit|pussy|vibe|wand)\b/i, 'front'],
+  [/\b(ass|butt|back|plug|prostate)\b/i, 'back'],
   [/\b(both|everything|all of it)\b/i, 'both'],
 ];
 
