@@ -1269,6 +1269,16 @@ html, body {
   flex-shrink: 0;
 }
 
+.settings-char-export {
+  display: flex;
+  align-items: center;
+  color: var(--label-secondary);
+  padding: 6px;
+  flex-shrink: 0;
+  text-decoration: none;
+}
+.settings-char-export:hover { color: var(--accent); }
+
 /* ===== CHARACTER FORM ===== */
 .char-form {
   flex: 1;

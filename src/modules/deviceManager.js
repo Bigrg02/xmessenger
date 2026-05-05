@@ -73,11 +73,15 @@ const DEFAULT_TRANSPORT = () => ({
 const LOVENSE_API_BASE = 'https://api.lovense-api.com/api/basicApi';
 const LOVENSE_LAN_BASE = 'https://api.lovense-api.com/api/lan/v2';
 const DEFAULT_COMMAND_DURATION_SEC = 600;
+const EDGE_CHANNELS = [
+  { suffix: 'v1', label: 'Internal Motor', action: 'Vibrate1', defaultRole: 'internal', order: 1 },
+  { suffix: 'v2', label: 'External Motor', action: 'Vibrate2', defaultRole: 'external', order: 2 },
+];
+
 const MULTI_ZONE_TOY_MAP = {
-  edge: [
-    { suffix: 'v1', label: 'Internal Motor', action: 'Vibrate1', defaultRole: 'internal', order: 1 },
-    { suffix: 'v2', label: 'External Motor', action: 'Vibrate2', defaultRole: 'external', order: 2 },
-  ],
+  edge: EDGE_CHANNELS,
+  edge2: EDGE_CHANNELS,
+  edge3: EDGE_CHANNELS,
   gemini: [
     { suffix: 'v1', label: 'Motor 1', action: 'Vibrate1', defaultRole: 'front', order: 1 },
     { suffix: 'v2', label: 'Motor 2', action: 'Vibrate2', defaultRole: 'back', order: 2 },
@@ -473,12 +477,11 @@ class DeviceManager extends EventEmitter {
         action: command.action || 'Stop',
         timeSec: command.timeSec ?? DEFAULT_COMMAND_DURATION_SEC,
         apiVer: command.apiVer ?? 1,
-        stopPrevious: 1,
       };
 
       if (toyId) payload.toy = toyId;
 
-      axios.post(`${LOVENSE_LAN_BASE}/command`, payload, {
+      axios.post(`${LOVENSE_API_BASE}/command`, payload, {
         headers: { 'Content-Type': 'application/json' },
         timeout: 15000,
       }).catch(err => {
@@ -535,6 +538,17 @@ class DeviceManager extends EventEmitter {
       const list = grouped.get(device.toyId) || [];
       list.push(device);
       grouped.set(device.toyId, list);
+    }
+
+    // For multi-zone toys (e.g. Edge 2), fill in sibling channels that weren't
+    // in the `devices` list so the combined action string is always complete.
+    for (const [toyId, list] of grouped.entries()) {
+      const listedIds = new Set(list.map(d => d.id));
+      for (const d of this.devices.values()) {
+        if (d.toyId === toyId && !listedIds.has(d.id) && d.connected && d.enabled) {
+          list.push(d);
+        }
+      }
     }
 
     for (const [toyId, groupedDevices] of grouped.entries()) {

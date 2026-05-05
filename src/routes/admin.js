@@ -4,6 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
+const AdmZip = require('adm-zip');
 const { normalizeCard, normalizeGeneratedDraft, splitList } = require('../modules/characterCard');
 const llmClient = require('../modules/llmClient');
 const comfyuiSettings = require('../modules/comfyuiSettings');
@@ -353,6 +354,62 @@ router.patch('/characters/:slug', upload.fields([
   writeCard(slug, card);
 
   res.json({ ok: true, slug, card });
+});
+
+// GET /api/admin/characters/:slug/export — download character as ZIP
+router.get('/characters/:slug/export', (req, res) => {
+  const { slug } = req.params;
+  const charDir = path.join(CHARS_DIR, slug);
+  if (!fs.existsSync(charDir)) return res.status(404).json({ error: 'Not found' });
+
+  try {
+    const zip = new AdmZip();
+    zip.addLocalFolder(charDir, slug);
+    const buffer = zip.toBuffer();
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${slug}.zip"`);
+    res.send(buffer);
+  } catch (err) {
+    console.error('[admin] export failed:', err.message);
+    res.status(500).json({ error: 'Export failed' });
+  }
+});
+
+// POST /api/admin/characters/import — upload a character ZIP
+router.post('/characters/import', upload.single('file'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'file required' });
+
+  try {
+    const zip = new AdmZip(req.file.buffer);
+    const entries = zip.getEntries();
+
+    const cardEntry = entries.find(e => /^[^/]+\/card\.json$/.test(e.entryName));
+    if (!cardEntry) return res.status(400).json({ error: 'Invalid ZIP: no card.json found' });
+
+    const card = JSON.parse(cardEntry.getData().toString('utf8'));
+    const slug = slugify(card.name || '');
+    if (!slug) return res.status(400).json({ error: 'Invalid character name in card.json' });
+
+    ensureCharDirs(slug);
+    const destDir = path.join(CHARS_DIR, slug);
+
+    for (const entry of entries) {
+      if (entry.isDirectory) continue;
+      const parts = entry.entryName.split('/');
+      parts.shift(); // strip top-level folder
+      const relPath = parts.join('/');
+      if (!relPath || relPath.includes('..') || path.isAbsolute(relPath)) continue;
+      const destPath = path.join(destDir, relPath);
+      fs.mkdirSync(path.dirname(destPath), { recursive: true });
+      fs.writeFileSync(destPath, entry.getData());
+    }
+
+    const newCard = readCard(slug);
+    res.json({ ok: true, slug, card: newCard });
+  } catch (err) {
+    console.error('[admin] import failed:', err.message);
+    res.status(400).json({ error: err.message || 'Import failed' });
+  }
 });
 
 // DELETE /api/admin/characters/:slug

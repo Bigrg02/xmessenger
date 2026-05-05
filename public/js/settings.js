@@ -104,8 +104,12 @@ const Settings = (() => {
           <img class="settings-char-avatar" src="${avatarSrc}" alt="${c.name}"
             onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 40 40%22><circle cx=%2220%22 cy=%2220%22 r=%2220%22 fill=%22%23ddd%22/></svg>'">
           <span class="settings-char-name">${c.name}</span>
+          <a class="settings-char-export" href="/api/admin/characters/${c.slug}/export" download="${c.slug}.zip" title="Export ZIP">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          </a>
           <button class="settings-char-edit" data-slug="${c.slug}">Edit</button>
         `;
+        row.querySelector('.settings-char-export').addEventListener('click', e => e.stopPropagation());
         row.querySelector('.settings-char-edit').addEventListener('click', e => {
           e.stopPropagation();
           openForm(c.slug);
@@ -713,6 +717,30 @@ const Settings = (() => {
     document.getElementById('btn-settings').addEventListener('click', openSettings);
     document.getElementById('btn-settings-back').addEventListener('click', closeSettings);
     document.getElementById('btn-new-character').addEventListener('click', () => openForm(null));
+
+    const importInput = document.getElementById('import-char-input');
+    document.getElementById('btn-import-character').addEventListener('click', () => importInput.click());
+    importInput.addEventListener('change', async e => {
+      const file = e.target.files?.[0];
+      importInput.value = '';
+      if (!file) return;
+
+      const btn = document.getElementById('btn-import-character');
+      btn.disabled = true;
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch('/api/admin/characters/import', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Import failed');
+        await loadSettingsCharList();
+        App.refreshCharacterList();
+      } catch (err) {
+        alert(`Import failed: ${err.message}`);
+      } finally {
+        btn.disabled = false;
+      }
+    });
     document.getElementById('btn-comfyui-refresh').addEventListener('click', () => loadComfyUiSettings(true));
     document.getElementById('btn-comfyui-save').addEventListener('click', saveComfyUiSettings);
     document.getElementById('btn-form-back').addEventListener('click', closeForm);

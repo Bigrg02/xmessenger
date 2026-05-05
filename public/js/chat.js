@@ -635,7 +635,10 @@ const Chat = (() => {
 
     lovenseSocket.on('disconnect', async () => {
       lovenseSocketReady = false;
-      await reportLovenseStatus({ appConnected: false, online: false, error: 'Lovense socket disconnected' });
+      lovenseSocket = null;
+      // reportLovenseStatus triggers updateDeviceState → syncLovenseSocketFromState,
+      // which will rebind the socket if socketIoUrl is still in state.
+      await reportLovenseStatus({ appConnected: false, online: false, error: '' });
     });
 
     lovenseSocket.on('basicapi_get_qrcode_tc', async res => {
