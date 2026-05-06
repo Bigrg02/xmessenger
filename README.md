@@ -260,8 +260,9 @@ The image lightbox also supports:
 
 - prompt inspection
 - regenerate in place
-- zoom controls
+- zoom controls with +/−/reset buttons and keyboard shortcuts
 - scroll for tall images
+- touch pinch-to-zoom, single-finger pan when zoomed, double-tap to toggle zoom
 
 ## Main API Surfaces
 
@@ -279,6 +280,8 @@ The image lightbox also supports:
 - `POST /api/admin/comfyui-settings/validate`
 - `GET /api/admin/comfyui-workflow`
 - `POST /api/admin/comfyui-workflow`
+- `GET /api/admin/app-settings`
+- `PATCH /api/admin/app-settings`
 
 ## Development Notes
 
@@ -290,6 +293,8 @@ The image lightbox also supports:
 - Automatic image sending is gated by the current turn's inferred tone, so visual requests still trigger easily while normal-topic turns suppress stray photo sends.
 - The Settings screen now includes a full in-app image-system setup and dry-validation surface.
 - Session reload now restores the newest 100 messages in chronological order rather than the oldest 100, so late-thread messages persist visibly after refresh.
+- All runtime configuration (API keys, LLM params, device intent levels, timeouts) lives in `src/modules/appSettings.js` and is stored in `data/app-settings.json`. `.env` values are only fallbacks.
+- The character list preview replaces raw image file paths with "📷 Photo" so the inbox looks clean after image exchanges.
 
 ## Known Limits
 

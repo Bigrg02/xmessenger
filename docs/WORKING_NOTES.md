@@ -136,6 +136,14 @@ Key details:
 - Tracks the last dry-validation result
 - Lists workflow nodes and workflow metadata for the settings UI
 
+### `src/modules/appSettings.js`
+
+- Single source of truth for all runtime configuration
+- Persists to `data/app-settings.json`; `.env` values are fallbacks only
+- Covers: OpenRouter API key, Lovense developer token, Whisper URL, LLM temperature and max tokens, device intent levels per label, silence timeout, manual override duration, image gen timeout, default image location
+- `safeView()` returns masked key values and boolean presence flags for the settings UI
+- All other modules (`llmClient`, `deviceManager`, `imageGenerator`, `messages`) read from this module — no hardcoded config anywhere else
+
 ## Frontend Responsibilities
 
 ### `public/js/app.js`
@@ -143,6 +151,7 @@ Key details:
 - Owns top-level screen navigation
 - Opens chats and SSE connections
 - Refreshes the character list
+- Formats character preview text — raw image paths are shown as "📷 Photo"
 
 ### `public/js/chat.js`
 
@@ -152,6 +161,7 @@ Key details:
 - Owns the Lovense QR pairing panel and app-state polling
 - Owns manual scene-image generation from both the `Scene` button and avatar/header tap
 - Shows the small header spinner while manual photo generation is in flight
+- Lightbox: zoom uses actual image width (not CSS transform) so the scroll container is scrollable; supports pinch-to-zoom, single-finger pan when zoomed, and double-tap to toggle zoom
 
 ### `public/js/ptt.js`
 
@@ -168,6 +178,7 @@ Key details:
 - Uploads/downloads the shared workflow JSON
 - Renders workflow node quick-pick actions
 - Runs dry image-system validation against the active ComfyUI server
+- Loads and saves all app settings (API keys, LLM params, device intent levels, timeouts)
 
 ## Character Contract
 
@@ -294,9 +305,9 @@ Notes:
 
 - The repo has an automated Node test suite via `npm test`, but no dedicated lint script.
 - The app is integration-heavy, so some validation will still be manual even with tests.
-- `characters/sara/card.json` currently has an uncommitted user edit and should be treated carefully.
 - `data/` contains runtime state and should not be treated as source-of-truth code.
 - ComfyUI is intended to use a single shared workflow file rather than per-character workflow JSON.
+- All runtime config is now stored in `data/app-settings.json`. Never hardcode API keys or behavior thresholds — always add them to `appSettings.js` instead.
 
 ## Known Sharp Edges
 
