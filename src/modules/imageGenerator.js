@@ -4,6 +4,7 @@ const fs = require('fs');
 const FormData = require('form-data');
 const path = require('path');
 const { readSettings, getEffectiveServerUrl, SHARED_WORKFLOW_PATH } = require('./comfyuiSettings');
+const appSettings = require('./appSettings');
 
 const IMAGES_DIR = path.join(__dirname, '../../data/images');
 if (!fs.existsSync(IMAGES_DIR)) fs.mkdirSync(IMAGES_DIR, { recursive: true });
@@ -26,6 +27,15 @@ function normalizeImageScene(imageRequest = {}) {
     location: String(imageRequest.location || '').trim(),
     action: String(imageRequest.action || imageRequest.scene || '').trim(),
   };
+}
+
+function normalizeClauseText(text = '') {
+  return String(text || '')
+    .replace(/\s+,/g, ',')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/^,\s*/g, '')
+    .replace(/[,\s]+$/g, '')
+    .trim();
 }
 
 function hasColorDescriptor(text = '') {
@@ -59,14 +69,45 @@ function normalizePeekStates(text = '') {
   value = value.replace(/\bhalf[- ]hidden\b/gi, 'hidden');
   value = value.replace(/\bhalf[- ]shown\b/gi, 'fully visible');
 
-  return value
+  return normalizeClauseText(value);
+}
+
+function splitClothingActionInstructions(clothingText = '') {
+  const normalized = normalizePeekStates(clothingText);
+  if (!normalized) {
+    return { clothing: '', actionHints: [] };
+  }
+
+  const movementPattern = /\b(pulled down enough to fully expose [^,.;]+|pulled down enough to expose [^,.;]+|pulled down[^,.;]*|pulled aside[^,.;]*|tugged aside[^,.;]*|moved aside[^,.;]*|lifted[^,.;]*|hiked up[^,.;]*|slipped off[^,.;]*|sliding off[^,.;]*|unhooked[^,.;]*|unclipped[^,.;]*)\b/gi;
+  const actionHints = [];
+  let clothing = normalized.replace(movementPattern, match => {
+    actionHints.push(normalizeClauseText(match));
+    return '';
+  });
+
+  clothing = clothing
+    .replace(/\s*,\s*,+/g, ', ')
     .replace(/\s+,/g, ',')
+    .replace(/^,\s*/g, '')
+    .replace(/\s*,\s*$/g, '')
     .replace(/\s{2,}/g, ' ')
     .trim();
+
+  if (!clothing && actionHints.length) {
+    return {
+      clothing: 'same outfit she is currently wearing',
+      actionHints,
+    };
+  }
+
+  return {
+    clothing: normalizeClauseText(clothing),
+    actionHints,
+  };
 }
 
 function buildClothingPrompt(clothingText = '') {
-  const clothing = normalizePeekStates(clothingText);
+  const { clothing } = splitClothingActionInstructions(clothingText);
   if (!clothing) {
     return 'same outfit she is currently wearing, with each visible clothing piece described by color';
   }
@@ -101,7 +142,9 @@ function prefersRearView(actionText = '', clothingText = '') {
 }
 
 function buildActionPrompt(actionText = '', clothingText = '') {
-  const base = normalizePeekStates(actionText);
+  const { actionHints } = splitClothingActionInstructions(clothingText);
+  const normalizedAction = normalizePeekStates(actionText);
+  const base = normalizeClauseText([normalizedAction, ...actionHints].filter(Boolean).join(', '));
   const parts = [];
 
   if (base) {
@@ -137,7 +180,7 @@ function buildImagePrompt(appearancePrompt, imageRequest = {}) {
   const scene = normalizeImageScene(imageRequest);
   const body = String(appearancePrompt || '').trim() || 'same body and overall appearance as the reference woman';
   const clothing = buildClothingPrompt(scene.clothing);
-  const location = scene.location || 'an intimate indoor setting';
+  const location = scene.location || appSettings.get('imageDefaultLocation') || 'an intimate indoor setting';
   const action = buildActionPrompt(scene.action, scene.clothing);
 
   return [
@@ -299,7 +342,7 @@ function injectWorkflowBindings(workflow, promptText, referenceImage, settings) 
   return { workflow: wf, seed };
 }
 
-async function pollHistory(comfyUrl, promptId, maxWait = 180000) {
+async function pollHistory(comfyUrl, promptId, maxWait = appSettings.get('imageGenTimeoutMs') ?? 180000) {
   const start = Date.now();
   while (Date.now() - start < maxWait) {
     await new Promise(r => setTimeout(r, 3000));

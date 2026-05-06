@@ -1,4 +1,5 @@
 const axios = require('axios');
+const appSettings = require('./appSettings');
 
 const BASE_URL = 'https://openrouter.ai/api/v1';
 
@@ -350,6 +351,7 @@ function buildPromptContext(card, recentMessages, userMessage, options = {}) {
       card.sexual_personality && `Scene sexual personality: ${card.sexual_personality}`,
       card.turn_ons?.length && `Turn-ons: ${joinList(card.turn_ons)}`,
       card.kinks?.length && `Kinks: ${joinList(card.kinks)}`,
+      card.her_desires && `What she craves and may ask for: ${card.her_desires}`,
       card.aftercare_style && `Aftercare style: ${card.aftercare_style}`,
       card.pet_names?.length && `Pet names she may use naturally: ${joinList(card.pet_names)}`,
       inDevicePhase && card.device_phase_style && `Device phase texting style: ${card.device_phase_style}`,
@@ -433,6 +435,9 @@ RULES - follow exactly:
 - In device mode, only emit toy_control actions when autonomy is enabled and the scene clearly calls for control
 - Keep toy actions concise and safe within the provided caps; prefer 1-3 actions per response
 - Multiple short texts are fine - put them on separate lines inside "message"
+- You have your own desires. Roughly every 3–5 exchanges in a warm or explicit scene, let her express what she wants — ask for a photo, describe something she's craving, redirect toward an act that turns her on, or ask the user to do something specific. Don't wait to be led every time.
+- Vary your response type. Don't mirror the user's escalation every message. Mix in teasing, buildup, asking for something, briefly pulling back before giving in, or reacting with genuine want rather than just compliance.
+- She is not a yes-machine. She can want something specific, get impatient, or redirect the scene toward what she's craving without breaking the mood.
 
 OUTPUT FORMAT - you must always respond with valid JSON, no other text:
 {
@@ -459,6 +464,7 @@ When image_request.send is true:
 - image requests should follow the current image mode: avoid auto-sending in neutral or practical turns, but let warm or explicit desire shape the kind of image she offers
 - setup_message should be a short in-character line like "hold on" or "gimme a sec"
 - clothing should describe what she is wearing, and every visible clothing piece should include an explicit color
+- keep clothing strictly to the outfit itself; if any garment is pulled down, pulled aside, lifted, hiked up, tugged aside, or slipped off, that movement belongs in action, not clothing
 - do not describe underwear, panties, thongs, bras, or body parts as peeking, barely showing, slightly visible, or half-hidden
 - for Flux consistency, intimate clothing should be either clearly visible/exposed or clearly hidden/covered
 - if underwear is mentioned with shorts, a skirt, a dress, pants, or leggings, do not say the underwear is just visible under them
@@ -605,11 +611,12 @@ function makeResponse(message, parsed = {}) {
 }
 
 async function callLLM(model, messages, useJsonMode) {
+  const s = appSettings.load();
   const body = {
     model,
     messages,
-    temperature: 0.9,
-    max_tokens: 700,
+    temperature: s.llmTemperature ?? 0.9,
+    max_tokens: s.llmMaxTokens ?? 700,
   };
 
   if (useJsonMode) {
@@ -619,7 +626,7 @@ async function callLLM(model, messages, useJsonMode) {
   try {
     const response = await axios.post(`${BASE_URL}/chat/completions`, body, {
       headers: {
-        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        Authorization: `Bearer ${appSettings.getOpenRouterKey()}`,
         'HTTP-Referer': 'http://localhost:3000',
         'X-Title': 'xMessage',
         'Content-Type': 'application/json',
@@ -712,7 +719,7 @@ async function summarize(card, messages) {
     },
     {
       headers: {
-        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        Authorization: `Bearer ${appSettings.getOpenRouterKey()}`,
         'HTTP-Referer': 'http://localhost:3000',
         'X-Title': 'xMessage',
       },
@@ -747,6 +754,7 @@ Let core desires shape the kind of scene she would naturally offer.
 Let turn-ons and kinks influence the image only as recurring motifs, not by listing them directly.
 
 For clothing, every visible clothing piece must include a clear color.
+Keep clothing strictly to the outfit itself. If any garment is pulled down, pulled aside, lifted, hiked up, tugged aside, or slipped off, put that movement in action instead of clothing.
 If clothes were removed, say that explicitly with topless, bottomless, nude, bra off, panties off, or equivalent clear wording.
 For action, explicitly state:
 - her body position or pose
@@ -809,7 +817,7 @@ async function suggestManualImageRequest(card, recentMessages) {
 
   const response = await axios.post(`${BASE_URL}/chat/completions`, body, {
     headers: {
-      Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      Authorization: `Bearer ${appSettings.getOpenRouterKey()}`,
       'HTTP-Referer': 'http://localhost:3000',
       'X-Title': 'xMessage',
       'Content-Type': 'application/json',

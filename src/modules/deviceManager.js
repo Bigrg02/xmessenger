@@ -4,6 +4,7 @@ const path = require('path');
 const crypto = require('crypto');
 const EventEmitter = require('events');
 const axios = require('axios');
+const appSettings = require('./appSettings');
 
 const DATA_DIR = path.join(__dirname, '../../data');
 const PREFS_PATH = path.join(DATA_DIR, 'device-preferences.json');
@@ -28,13 +29,19 @@ const PAIRING_STAGES = {
   ERROR: 'error',
 };
 
-const INTENT_LEVELS = {
+// Defaults — overridden at runtime by appSettings.intentLevels
+const INTENT_LEVELS_DEFAULT = {
   neutral: 0.2,
   teasing: 0.35,
   building: 0.55,
   intense: 0.8,
   cooling: 0.12,
 };
+
+function getIntentLevels() {
+  const s = appSettings.load();
+  return { ...INTENT_LEVELS_DEFAULT, ...(s.intentLevels || {}) };
+}
 
 const DEFAULT_STATE = () => ({
   activeSessionId: null,
@@ -462,7 +469,7 @@ class DeviceManager extends EventEmitter {
   }
 
   async _sendLovenseCommand(command) {
-    const developerToken = process.env.LOVENSE_DEVELOPER_TOKEN;
+    const developerToken = appSettings.getLovenseToken();
     if (!developerToken) return;
 
     const toyIds = Array.isArray(command.toyIds) && command.toyIds.length
@@ -774,10 +781,10 @@ class DeviceManager extends EventEmitter {
   }
 
   async startPairing() {
-    const developerToken = process.env.LOVENSE_DEVELOPER_TOKEN;
+    const developerToken = appSettings.getLovenseToken();
     if (!developerToken) {
       this._applyTransportPatch({
-        lastError: 'LOVENSE_DEVELOPER_TOKEN is not configured',
+        lastError: 'Lovense developer token is not configured. Set it in App Settings.',
       }, { stage: PAIRING_STAGES.ERROR });
       throw new Error(this.transport.lastError);
     }
@@ -1045,7 +1052,8 @@ class DeviceManager extends EventEmitter {
   }
 
   setIntent(intent) {
-    const targetLevel = INTENT_LEVELS[intent] ?? INTENT_LEVELS.neutral;
+    const levels = getIntentLevels();
+    const targetLevel = levels[intent] ?? levels.neutral;
     const devices = Array.from(this.devices.values()).filter(device => device.enabled);
     this._updateCurrentAction({ type: 'set_level', target: { scope: 'enabled' }, level: targetLevel, durationMs: 1200 }, 'intent');
     this._transitionDevices(devices, targetLevel, 1200, 'intent', () => this._updateCurrentAction(null, 'intent'));
@@ -1134,7 +1142,7 @@ class DeviceManager extends EventEmitter {
   setDeviceLevel(deviceId, level, options = {}) {
     const device = this._getDeviceById(deviceId);
     if (!device) throw new Error('Toy not found');
-    device.manualOverrideUntil = Date.now() + (options.overrideMs || 15000);
+    device.manualOverrideUntil = Date.now() + (options.overrideMs || appSettings.get('manualOverrideDurationMs') || 15000);
     this._applyLevel(device, level, options.source || 'manual');
     this._dispatchLevels([device], options.source || 'manual');
     this.emitState();

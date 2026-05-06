@@ -197,6 +197,7 @@ Expanded adult-profile fields are actively used now:
 
 - `core_desires`
 - `sexual_personality`
+- `her_desires` — what she craves and might initiate/ask for; gives her conversational agency
 - `turn_ons`
 - `kinks`
 - `aftercare_style`
@@ -208,8 +209,22 @@ Current prompting model:
 
 - `core_desires` shapes the ongoing emotional feel of the relationship all the time
 - `sexual_personality` influences both subtle chemistry and explicit scene style
+- `her_desires` surfaces every 3–5 exchanges in warm/explicit mode — she asks for something, redirects, or expresses what she wants rather than always reacting
 - `turn_ons` and `kinks` should surface as repeated themes in warm/explicit chats, image offers, and toy-control flavor
 - explicitness is no longer meant to stick forever just because an older part of the thread was hot
+
+## App Settings (runtime config)
+
+All settings are editable in-app at **Settings → APP SETTINGS**. Stored in `data/app-settings.json`.
+In-app values take precedence over `.env` fallbacks.
+
+Key settings:
+- API keys (OpenRouter, Lovense) — override `.env`
+- External service URLs (Whisper, Intiface)
+- LLM temperature + max tokens
+- Device intent levels (neutral/teasing/building/intense/cooling → 0–1 range)
+- Silence check-in delay, manual override duration
+- Image gen timeout, default location fallback
 
 ## Local Commands
 

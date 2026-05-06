@@ -22,6 +22,7 @@ const Settings = (() => {
     screenSettings.classList.add('active');
     loadSettingsCharList();
     loadComfyUiSettings();
+    loadAppSettings();
   }
 
   function closeSettings() {
@@ -666,6 +667,7 @@ const Settings = (() => {
       document.getElementById('form-kinks').value = (c.kinks || []).join(', ');
       document.getElementById('form-limits').value = (c.limits || []).join(', ');
       document.getElementById('form-aftercare-style').value = c.aftercare_style || '';
+      document.getElementById('form-her-desires').value = c.her_desires || '';
       document.getElementById('form-first-message').value = c.first_message || '';
       document.getElementById('form-appearance').value = c.appearance_prompt || '';
 
@@ -725,6 +727,7 @@ const Settings = (() => {
       kinks: document.getElementById('form-kinks').value.trim(),
       limits: document.getElementById('form-limits').value.trim(),
       aftercare_style: document.getElementById('form-aftercare-style').value.trim(),
+      her_desires: document.getElementById('form-her-desires').value.trim(),
       first_message: document.getElementById('form-first-message').value.trim(),
       appearance_prompt: document.getElementById('form-appearance').value.trim(),
     };
@@ -745,6 +748,7 @@ const Settings = (() => {
     document.getElementById('form-kinks').value = (draft.kinks || []).join(', ');
     document.getElementById('form-limits').value = (draft.limits || []).join(', ');
     document.getElementById('form-aftercare-style').value = draft.aftercare_style || '';
+    document.getElementById('form-her-desires').value = draft.her_desires || '';
     document.getElementById('form-first-message').value = draft.first_message || '';
     document.getElementById('form-appearance').value = draft.appearance_prompt || '';
   }
@@ -947,6 +951,7 @@ const Settings = (() => {
       fd.append('kinks', document.getElementById('form-kinks').value.trim());
       fd.append('limits', document.getElementById('form-limits').value.trim());
       fd.append('aftercare_style', document.getElementById('form-aftercare-style').value.trim());
+      fd.append('her_desires', document.getElementById('form-her-desires').value.trim());
       fd.append('first_message', document.getElementById('form-first-message').value.trim());
       fd.append('appearance_prompt', document.getElementById('form-appearance').value.trim());
 
@@ -1086,6 +1091,135 @@ const Settings = (() => {
     });
 
     document.getElementById('form-accent').addEventListener('input', e => syncSwatches(e.target.value));
+
+    initAppSettings();
+  }
+
+  // ── App Settings ─────────────────────────────────────────────
+
+  const intentKeys = ['neutral', 'teasing', 'building', 'intense', 'cooling'];
+
+  function bindIntentSlider(key) {
+    const slider = document.getElementById(`as-intent-${key}`);
+    const val = document.getElementById(`as-intent-${key}-val`);
+    if (!slider || !val) return;
+    slider.addEventListener('input', () => {
+      val.textContent = Number(slider.value).toFixed(2);
+    });
+  }
+
+  function bindTempSlider() {
+    const slider = document.getElementById('as-llm-temp');
+    const display = document.getElementById('as-temp-display');
+    if (!slider || !display) return;
+    slider.addEventListener('input', () => {
+      display.textContent = Number(slider.value).toFixed(2);
+    });
+  }
+
+  async function loadAppSettings() {
+    try {
+      const res = await fetch('/api/admin/app-settings');
+      if (!res.ok) return;
+      const s = await res.json();
+
+      // API keys — show badge if set, leave field empty (never pre-fill secrets)
+      document.getElementById('as-openrouter-badge').classList.toggle('hidden', !s.openrouterKeySet);
+      document.getElementById('as-lovense-badge').classList.toggle('hidden', !s.lovenseTokenSet);
+
+      // Service URLs
+      setVal('as-whisper-url', s.whisperApiUrl || '');
+      setVal('as-intiface-url', s.intifaceWsUrl || '');
+
+      // LLM
+      const temp = s.llmTemperature ?? 0.9;
+      setVal('as-llm-temp', temp);
+      const display = document.getElementById('as-temp-display');
+      if (display) display.textContent = Number(temp).toFixed(2);
+      setVal('as-llm-tokens', s.llmMaxTokens ?? 700);
+
+      // Intent levels
+      const lvl = s.intentLevels || {};
+      for (const key of intentKeys) {
+        const v = lvl[key] ?? { neutral: 0.2, teasing: 0.35, building: 0.55, intense: 0.8, cooling: 0.12 }[key];
+        setVal(`as-intent-${key}`, v);
+        const valEl = document.getElementById(`as-intent-${key}-val`);
+        if (valEl) valEl.textContent = Number(v).toFixed(2);
+      }
+
+      // Timeouts
+      setVal('as-silence-timeout', Math.round((s.silenceTimeoutMs ?? 45000) / 1000));
+      setVal('as-override-duration', Math.round((s.manualOverrideDurationMs ?? 15000) / 1000));
+      setVal('as-image-timeout', Math.round((s.imageGenTimeoutMs ?? 180000) / 1000));
+      setVal('as-image-location', s.imageDefaultLocation || '');
+    } catch (err) {
+      console.error('[app-settings] load error', err);
+    }
+  }
+
+  function setVal(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.value = value;
+  }
+
+  async function saveAppSettings() {
+    const btn = document.getElementById('btn-save-app-settings');
+    const status = document.getElementById('as-save-status');
+    btn.disabled = true;
+
+    const keyField = document.getElementById('as-openrouter-key').value.trim();
+    const tokenField = document.getElementById('as-lovense-token').value.trim();
+
+    const payload = {
+      whisperApiUrl: document.getElementById('as-whisper-url').value.trim(),
+      intifaceWsUrl: document.getElementById('as-intiface-url').value.trim(),
+      llmTemperature: Number(document.getElementById('as-llm-temp').value),
+      llmMaxTokens: Number(document.getElementById('as-llm-tokens').value),
+      intentLevels: {},
+      silenceTimeoutMs: Number(document.getElementById('as-silence-timeout').value) * 1000,
+      manualOverrideDurationMs: Number(document.getElementById('as-override-duration').value) * 1000,
+      imageGenTimeoutMs: Number(document.getElementById('as-image-timeout').value) * 1000,
+      imageDefaultLocation: document.getElementById('as-image-location').value.trim(),
+    };
+
+    // Only send key fields if the user actually typed something
+    if (keyField) payload.openrouterApiKey = keyField;
+    if (tokenField) payload.lovenseDeveloperToken = tokenField;
+
+    for (const key of intentKeys) {
+      payload.intentLevels[key] = Number(document.getElementById(`as-intent-${key}`).value);
+    }
+
+    try {
+      const res = await fetch('/api/admin/app-settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(await res.text());
+
+      // Clear key fields after save, refresh badges
+      document.getElementById('as-openrouter-key').value = '';
+      document.getElementById('as-lovense-token').value = '';
+      await loadAppSettings();
+
+      status.classList.remove('hidden');
+      setTimeout(() => status.classList.add('hidden'), 2500);
+    } catch (err) {
+      console.error('[app-settings] save error', err);
+      status.textContent = 'Error saving';
+      status.style.color = '#ff3b30';
+      status.classList.remove('hidden');
+      setTimeout(() => { status.classList.add('hidden'); status.textContent = 'Saved'; status.style.color = ''; }, 3000);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function initAppSettings() {
+    bindTempSlider();
+    for (const key of intentKeys) bindIntentSlider(key);
+    document.getElementById('btn-save-app-settings').addEventListener('click', saveAppSettings);
   }
 
   return { init };

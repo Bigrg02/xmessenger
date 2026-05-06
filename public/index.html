@@ -194,6 +194,109 @@
       <div class="settings-section-label">CHARACTERS</div>
       <div id="settings-char-list" class="settings-char-list"></div>
 
+      <div class="settings-section-label">APP SETTINGS</div>
+      <div class="settings-card" id="app-settings-card">
+
+        <div class="form-section-label">API KEYS</div>
+        <div class="form-group">
+          <label class="form-label">OpenRouter API Key</label>
+          <div class="key-input-row">
+            <input type="password" id="as-openrouter-key" class="form-input" placeholder="sk-or-…  (leave blank to use server .env)">
+            <span class="key-set-badge hidden" id="as-openrouter-badge">SET</span>
+          </div>
+          <div class="form-hint">Powers all LLM chat and character generation. Set here or via OPENROUTER_API_KEY in .env.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Lovense Developer Token</label>
+          <div class="key-input-row">
+            <input type="password" id="as-lovense-token" class="form-input" placeholder="(leave blank to use server .env)">
+            <span class="key-set-badge hidden" id="as-lovense-badge">SET</span>
+          </div>
+          <div class="form-hint">Required for Lovense toy pairing. Set here or via LOVENSE_DEVELOPER_TOKEN in .env.</div>
+        </div>
+
+        <div class="form-section-label">EXTERNAL SERVICES</div>
+        <div class="form-group">
+          <label class="form-label">Whisper API URL</label>
+          <input type="text" id="as-whisper-url" class="form-input" placeholder="http://192.168.1.x:8000">
+          <div class="form-hint">Speech-to-text service URL. Leave blank if not using voice input.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Intiface Central URL</label>
+          <input type="text" id="as-intiface-url" class="form-input" placeholder="ws://192.168.1.x:12345">
+          <div class="form-hint">Intiface WebSocket URL for device control fallback.</div>
+        </div>
+
+        <div class="form-section-label">LLM PARAMETERS</div>
+        <div class="form-group">
+          <label class="form-label">Chat Temperature <span class="form-hint-inline" id="as-temp-display">0.9</span></label>
+          <input type="range" id="as-llm-temp" class="form-range" min="0" max="2" step="0.05" value="0.9">
+          <div class="form-hint">Controls randomness. Lower = more predictable, higher = more creative. Default: 0.9</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Max Response Tokens</label>
+          <input type="number" id="as-llm-tokens" class="form-input form-input-sm" min="100" max="4000" step="50" value="700">
+          <div class="form-hint">Maximum length of each reply. Default: 700</div>
+        </div>
+
+        <div class="form-section-label">DEVICE INTENSITY LEVELS</div>
+        <div class="form-hint" style="margin-bottom:12px">Maps LLM intent labels to vibration strength (0 – 1.0). Changes apply to the next message.</div>
+        <div class="intent-levels-grid">
+          <div class="intent-level-row">
+            <label class="intent-label">Neutral</label>
+            <input type="range" id="as-intent-neutral" class="form-range" min="0" max="1" step="0.01" value="0.2">
+            <span class="intent-value" id="as-intent-neutral-val">0.20</span>
+          </div>
+          <div class="intent-level-row">
+            <label class="intent-label">Teasing</label>
+            <input type="range" id="as-intent-teasing" class="form-range" min="0" max="1" step="0.01" value="0.35">
+            <span class="intent-value" id="as-intent-teasing-val">0.35</span>
+          </div>
+          <div class="intent-level-row">
+            <label class="intent-label">Building</label>
+            <input type="range" id="as-intent-building" class="form-range" min="0" max="1" step="0.01" value="0.55">
+            <span class="intent-value" id="as-intent-building-val">0.55</span>
+          </div>
+          <div class="intent-level-row">
+            <label class="intent-label">Intense</label>
+            <input type="range" id="as-intent-intense" class="form-range" min="0" max="1" step="0.01" value="0.8">
+            <span class="intent-value" id="as-intent-intense-val">0.80</span>
+          </div>
+          <div class="intent-level-row">
+            <label class="intent-label">Cooling</label>
+            <input type="range" id="as-intent-cooling" class="form-range" min="0" max="1" step="0.01" value="0.12">
+            <span class="intent-value" id="as-intent-cooling-val">0.12</span>
+          </div>
+        </div>
+
+        <div class="form-section-label">BEHAVIOR TIMEOUTS</div>
+        <div class="form-group">
+          <label class="form-label">Silence Check-In Delay (seconds)</label>
+          <input type="number" id="as-silence-timeout" class="form-input form-input-sm" min="5" max="600" step="5" value="45">
+          <div class="form-hint">How long after your last message before she sends a checking-in audio clip. Default: 45</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Manual Override Duration (seconds)</label>
+          <input type="number" id="as-override-duration" class="form-input form-input-sm" min="1" max="120" step="1" value="15">
+          <div class="form-hint">How long a manual slider adjustment blocks automatic control. Default: 15</div>
+        </div>
+
+        <div class="form-section-label">IMAGE GENERATION</div>
+        <div class="form-group">
+          <label class="form-label">Generation Timeout (seconds)</label>
+          <input type="number" id="as-image-timeout" class="form-input form-input-sm" min="30" max="600" step="10" value="180">
+          <div class="form-hint">How long to wait for ComfyUI before giving up. Default: 180</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Default Location Fallback</label>
+          <input type="text" id="as-image-location" class="form-input" placeholder="an intimate indoor setting">
+          <div class="form-hint">Used when the LLM does not specify a location for the image.</div>
+        </div>
+
+        <button class="btn-primary" id="btn-save-app-settings">Save App Settings</button>
+        <div class="form-save-status hidden" id="as-save-status">Saved</div>
+      </div>
+
       <div class="settings-section-label">IMAGE SYSTEM</div>
       <div class="settings-card">
         <div class="settings-card-copy">
@@ -486,6 +589,10 @@
       <div class="form-group">
         <label class="form-label">Aftercare Style</label>
         <textarea id="form-aftercare-style" class="form-textarea" rows="3" placeholder="How does she act after intensity or climax? Reassuring, possessive, sleepy, doting, grounding..."></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Her Desires</label>
+        <textarea id="form-her-desires" class="form-textarea" rows="4" placeholder="What does she crave and might ask for? What would she initiate or redirect toward? What does she want the user to do to her?"></textarea>
       </div>
 
       <!-- ComfyUI -->

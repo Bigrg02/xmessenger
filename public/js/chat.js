@@ -882,13 +882,17 @@ const Chat = (() => {
 
   function setLightboxZoom(nextZoom) {
     lightboxZoom = Math.max(1, Math.min(4, Number(nextZoom) || 1));
-    lightboxImg.style.transform = `scale(${lightboxZoom})`;
-    lightboxImageWrap.classList.toggle('zoomed', lightboxZoom > 1);
-    lightboxZoomResetBtn.textContent = `${Math.round(lightboxZoom * 100)}%`;
-    if (lightboxZoom === 1) {
+    if (lightboxZoom > 1) {
+      lightboxImg.style.width = `${lightboxZoom * 100}%`;
+      lightboxImg.style.maxWidth = 'none';
+    } else {
+      lightboxImg.style.width = '';
+      lightboxImg.style.maxWidth = '';
       lightboxImageWrap.scrollLeft = 0;
       lightboxImageWrap.scrollTop = 0;
     }
+    lightboxImageWrap.classList.toggle('zoomed', lightboxZoom > 1);
+    lightboxZoomResetBtn.textContent = `${Math.round(lightboxZoom * 100)}%`;
   }
 
   function closeLightbox() {
@@ -1027,6 +1031,64 @@ const Chat = (() => {
       lightboxDragging = false;
     });
   });
+
+  // Touch: pan when zoomed, pinch-to-zoom, double-tap to zoom
+  let touchPanning = false;
+  let touchPinching = false;
+  let touchStartX = 0, touchStartY = 0;
+  let touchStartScrollLeft = 0, touchStartScrollTop = 0;
+  let pinchStartDist = 0, pinchStartZoom = 1;
+  let lastTapTime = 0;
+
+  function pinchDist(touches) {
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  lightboxImageWrap.addEventListener('touchstart', e => {
+    if (e.touches.length === 2) {
+      touchPinching = true;
+      touchPanning = false;
+      pinchStartDist = pinchDist(e.touches);
+      pinchStartZoom = lightboxZoom;
+      e.preventDefault();
+    } else if (e.touches.length === 1) {
+      touchPinching = false;
+      if (lightboxZoom > 1) {
+        touchPanning = true;
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+        touchStartScrollLeft = lightboxImageWrap.scrollLeft;
+        touchStartScrollTop = lightboxImageWrap.scrollTop;
+        e.preventDefault();
+      }
+    }
+  }, { passive: false });
+
+  lightboxImageWrap.addEventListener('touchmove', e => {
+    if (touchPinching && e.touches.length === 2) {
+      e.preventDefault();
+      setLightboxZoom(pinchStartZoom * (pinchDist(e.touches) / pinchStartDist));
+    } else if (touchPanning && e.touches.length === 1) {
+      e.preventDefault();
+      lightboxImageWrap.scrollLeft = touchStartScrollLeft - (e.touches[0].clientX - touchStartX);
+      lightboxImageWrap.scrollTop = touchStartScrollTop - (e.touches[0].clientY - touchStartY);
+    }
+  }, { passive: false });
+
+  lightboxImageWrap.addEventListener('touchend', e => {
+    if (e.touches.length === 0) {
+      const now = Date.now();
+      if (now - lastTapTime < 300 && !touchPanning && !touchPinching) {
+        setLightboxZoom(lightboxZoom > 1 ? 1 : 2);
+      }
+      lastTapTime = now;
+      touchPanning = false;
+      touchPinching = false;
+    }
+  });
+
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && !lightbox.classList.contains('hidden')) {
       closeLightbox();

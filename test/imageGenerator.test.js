@@ -270,7 +270,7 @@ test('buildActionPrompt removes partial reveal phrasing from the action', () => 
 test('buildClothingPrompt rewrites layered underwear visibility into a clean exposed state', () => {
   assert.equal(
     buildClothingPrompt('tiny gray running shorts that ride up my ass with black thong visible'),
-    'tiny gray running shorts pulled down enough to fully expose the black thong'
+    'tiny gray running shorts'
   );
 });
 
@@ -278,5 +278,12 @@ test('buildActionPrompt adds an expression when the action is otherwise blank-fa
   assert.equal(
     buildActionPrompt('She is standing with one hand on her hip, facing the camera, full-body photo', 'black lace bra and emerald thong'),
     'She is standing with one hand on her hip, facing the camera, full-body photo, with a playful, inviting smile'
+  );
+});
+
+test('buildActionPrompt moves garment movement out of clothing and into action', () => {
+  assert.equal(
+    buildActionPrompt('She is standing with one hand on her hip', 'tiny gray running shorts that ride up my ass with black thong visible'),
+    'She is standing with one hand on her hip, pulled down enough to fully expose the black thong, back to the camera, full-body shot from behind, looking back with a playful, inviting smile'
   );
 });

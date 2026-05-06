@@ -35,6 +35,12 @@ const App = (() => {
     });
   }
 
+  function previewText(msg) {
+    if (!msg) return 'Tap to start a conversation';
+    if (/^\/?data\/images\//.test(msg)) return '📷 Photo';
+    return truncate(msg, 60);
+  }
+
   async function loadCharacterList() {
     const list = document.getElementById('character-list');
     list.innerHTML = '<div style="padding:32px;text-align:center;color:var(--label-secondary)">Loading...</div>';
@@ -59,7 +65,7 @@ const App = (() => {
               <span class="char-name">${c.name}</span>
               <span class="char-time">${formatTime(c.last_message_at)}</span>
             </div>
-            <div class="char-preview">${c.last_message ? truncate(c.last_message, 60) : 'Tap to start a conversation'}</div>
+            <div class="char-preview">${previewText(c.last_message)}</div>
           </div>
           <div class="char-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg></div>
         `;

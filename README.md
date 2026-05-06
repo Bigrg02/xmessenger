@@ -146,14 +146,16 @@ Important card fields:
 - `appearance_prompt`
 - `accent_color`
 
-The app also supports expanded adult-profile fields such as `backstory`, `relationship_to_user`, `sexual_personality`, `turn_ons`, `kinks`, `limits`, `aftercare_style`, and `example_dialogue`.
+The app also supports expanded adult-profile fields such as `backstory`, `relationship_to_user`, `sexual_personality`, `turn_ons`, `kinks`, `limits`, `aftercare_style`, `her_desires`, and `example_dialogue`.
+
+`her_desires` describes what the character craves and might initiate or ask for — used to give the character conversational agency rather than always being reactive. Example: *"Loves being teased slowly. Will occasionally ask for a photo or describe what she wants done to her."*
 
 ## Character Tone Model
 
 Character tone is no longer driven only by "was the recent chat explicit." The runtime now separates:
 
 - always-on relationship feel, led by `core_desires`
-- warm/explicit scene expression, influenced by `sexual_personality`, `turn_ons`, `kinks`, and `aftercare_style`
+- warm/explicit scene expression, influenced by `sexual_personality`, `turn_ons`, `kinks`, `her_desires`, and `aftercare_style`
 - latest-turn intent, so real questions still get real answers even after a hot stretch
 
 In practice this means:
@@ -176,6 +178,28 @@ Current in-app image setup supports:
 - reference image node binding by node ID
 - optional seed node binding by node ID
 - dry validation without running a real render
+
+## App Settings (in-app configuration)
+
+All critical configuration can be changed inside the app at **Settings → APP SETTINGS** without touching the server. This is the primary way to configure a remote deployment.
+
+| Setting | Description |
+|---|---|
+| OpenRouter API Key | LLM API key — overrides `OPENROUTER_API_KEY` env var |
+| Lovense Developer Token | Device pairing token — overrides `LOVENSE_DEVELOPER_TOKEN` env var |
+| Whisper API URL | Speech-to-text endpoint |
+| Intiface Central URL | WebSocket URL for Intiface device control |
+| Chat Temperature | LLM creativity (0–2, default 0.9) |
+| Max Response Tokens | Max reply length (default 700) |
+| Device Intent Levels | Intensity per intent label (neutral → cooling, 0–1) |
+| Silence Check-In Delay | Seconds before checking-in audio fires (default 45) |
+| Manual Override Duration | Seconds slider adjustments block auto-control (default 15) |
+| Image Generation Timeout | Seconds before ComfyUI times out (default 180) |
+| Default Image Location | Fallback location when LLM doesn't specify one |
+
+Settings are stored in `data/app-settings.json` (gitignored). `.env` values remain as fallbacks when in-app values are not set.
+
+## Image System
 
 Runtime precedence:
 

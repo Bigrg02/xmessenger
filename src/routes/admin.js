@@ -9,6 +9,7 @@ const { normalizeCard, normalizeGeneratedDraft, splitList } = require('../module
 const llmClient = require('../modules/llmClient');
 const comfyuiSettings = require('../modules/comfyuiSettings');
 const imageGenerator = require('../modules/imageGenerator');
+const appSettings = require('../modules/appSettings');
 const CHARS_DIR = path.join(__dirname, '../../characters');
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
@@ -371,6 +372,7 @@ Return only valid JSON with exactly these fields:
   "kinks": [],
   "limits": [],
   "aftercare_style": "",
+  "her_desires": "",
   "first_message": "",
   "appearance_prompt": ""
 }
@@ -394,7 +396,7 @@ async function generateCharacterDraft(model, seed, conceptPrompt) {
   };
 
   const headers = {
-    Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+    Authorization: `Bearer ${appSettings.getOpenRouterKey()}`,
     'HTTP-Referer': 'http://localhost:3000',
     'X-Title': 'xMessage',
     'Content-Type': 'application/json',
@@ -447,7 +449,7 @@ router.post('/test-model', async (req, res) => {
       temperature: 0.9,
     }, {
       headers: {
-        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        Authorization: `Bearer ${appSettings.getOpenRouterKey()}`,
         'HTTP-Referer': 'http://localhost:3000',
         'X-Title': 'xMessage',
         'Content-Type': 'application/json',
@@ -669,6 +671,7 @@ function buildCard(name, slug, body, files, existing = {}) {
     core_desires: fieldValue(body, 'core_desires', existing.core_desires || ''),
     sexual_personality: fieldValue(body, 'sexual_personality', existing.sexual_personality || ''),
     aftercare_style: fieldValue(body, 'aftercare_style', existing.aftercare_style || ''),
+    her_desires: fieldValue(body, 'her_desires', existing.her_desires || ''),
     example_dialogue: fieldValue(body, 'example_dialogue', existing.example_dialogue || ''),
     pet_names: splitList(fieldValue(body, 'pet_names', existing.pet_names)),
     turn_ons: splitList(fieldValue(body, 'turn_ons', existing.turn_ons)),
@@ -683,5 +686,44 @@ function buildCard(name, slug, body, files, existing = {}) {
     device_phase_style: fieldValue(body, 'device_phase_style', existing.device_phase_style || 'Short reactive texts only, max 6 words.'),
   });
 }
+
+// GET /api/admin/app-settings — return current app settings (secrets masked)
+router.get('/app-settings', (req, res) => {
+  res.json(appSettings.safeView());
+});
+
+// PATCH /api/admin/app-settings — update one or more settings
+router.patch('/app-settings', (req, res) => {
+  try {
+    const allowed = [
+      'openrouterApiKey', 'lovenseDeveloperToken',
+      'whisperApiUrl', 'intifaceWsUrl',
+      'llmTemperature', 'llmMaxTokens',
+      'intentLevels',
+      'silenceTimeoutMs', 'manualOverrideDurationMs',
+      'imageGenTimeoutMs', 'imageDefaultLocation',
+    ];
+    const updates = {};
+    for (const key of allowed) {
+      if (req.body[key] !== undefined) updates[key] = req.body[key];
+    }
+    // Validate numeric ranges
+    if (updates.llmTemperature !== undefined) updates.llmTemperature = Math.min(2, Math.max(0, Number(updates.llmTemperature)));
+    if (updates.llmMaxTokens !== undefined) updates.llmMaxTokens = Math.min(4000, Math.max(100, Math.round(Number(updates.llmMaxTokens))));
+    if (updates.silenceTimeoutMs !== undefined) updates.silenceTimeoutMs = Math.max(5000, Number(updates.silenceTimeoutMs));
+    if (updates.manualOverrideDurationMs !== undefined) updates.manualOverrideDurationMs = Math.max(1000, Number(updates.manualOverrideDurationMs));
+    if (updates.imageGenTimeoutMs !== undefined) updates.imageGenTimeoutMs = Math.max(30000, Number(updates.imageGenTimeoutMs));
+    if (updates.intentLevels) {
+      const lvl = updates.intentLevels;
+      for (const k of Object.keys(lvl)) lvl[k] = Math.min(1, Math.max(0, Number(lvl[k])));
+    }
+    const saved = appSettings.save(updates);
+    appSettings.invalidateCache();
+    // Return masked view
+    res.json(appSettings.safeView());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 module.exports = router;

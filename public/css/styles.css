@@ -1018,13 +1018,13 @@ html, body {
   height: auto;
   object-fit: contain;
   border-radius: 12px;
-  transform-origin: top center;
-  transition: transform 0.15s ease;
 }
 
 .lightbox-image-wrap.zoomed {
   justify-content: flex-start;
+  align-items: flex-start;
   cursor: move;
+  touch-action: none;
 }
 
 .lightbox-prompt-panel {
@@ -1209,6 +1209,80 @@ html, body {
 
 .settings-inline-btn {
   margin-bottom: 0;
+}
+
+/* App Settings panel */
+.form-input-sm { width: 120px; }
+
+.form-hint-inline {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--label-secondary);
+  margin-left: 6px;
+}
+
+.form-range {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--separator);
+  outline: none;
+  margin: 8px 0 4px;
+}
+.form-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent, #ff2d55);
+  cursor: pointer;
+}
+
+.key-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.key-input-row .form-input { flex: 1; }
+
+.key-set-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: #30d158;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+.key-set-badge.hidden { display: none; }
+
+.intent-levels-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.intent-level-row {
+  display: grid;
+  grid-template-columns: 72px 1fr 36px;
+  align-items: center;
+  gap: 10px;
+}
+.intent-label {
+  font-size: 13px;
+  color: var(--label-secondary);
+}
+.intent-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--label-secondary);
+  text-align: right;
+}
+
+#as-save-status {
+  font-size: 13px;
+  color: #30d158;
+  margin-top: 8px;
+  padding: 0 16px 8px;
 }
 
 .workflow-node-list {
@@ -2061,3 +2135,34 @@ html, body {
 
 /* Prevent image drag */
 img { -webkit-user-drag: none; pointer-events: auto; }
+
+/* ===== MOBILE POLISH ===== */
+@media (max-width: 768px) {
+  /* Hide scrollbars on touch screens — momentum scrolling handles them */
+  #character-list,
+  .message-list,
+  .settings-body {
+    scrollbar-width: none;
+  }
+  #character-list::-webkit-scrollbar,
+  .message-list::-webkit-scrollbar,
+  .settings-body::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Lightbox: full-screen on mobile with no padding interference */
+  .lightbox {
+    padding: 0;
+    align-items: flex-start;
+  }
+  .lightbox-content {
+    width: 100%;
+    min-height: 100%;
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+    gap: 0;
+  }
+  .lightbox-image-wrap {
+    min-height: 50vh;
+  }
+}

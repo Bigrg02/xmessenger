@@ -12,6 +12,7 @@ const imageGenerator = require('../modules/imageGenerator');
 const intentDetector = require('../modules/intentDetector');
 const { saveChatImage } = require('../modules/chatUploads');
 const { loadCard } = require('./characters');
+const appSettings = require('../modules/appSettings');
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -24,10 +25,11 @@ const silenceTimers = new Map();
 function resetSilenceTimer(sessionId, card) {
   if (silenceTimers.has(sessionId)) clearTimeout(silenceTimers.get(sessionId));
 
+  const timeoutMs = appSettings.get('silenceTimeoutMs') ?? 45000;
   const timer = setTimeout(() => {
     const clip = audioManager.getClip(sessionId, card.name, 'checking_in');
     if (clip) sse.send(sessionId, 'audio', { url: clip, category: 'checking_in' });
-  }, 45000);
+  }, timeoutMs);
 
   silenceTimers.set(sessionId, timer);
 }
