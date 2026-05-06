@@ -7,10 +7,13 @@ const Settings = (() => {
   const draftModal     = document.getElementById('draft-modal');
   const promptModal    = document.getElementById('prompt-modal');
   const workflowNodesEl = document.getElementById('comfy-workflow-nodes');
+  const comfyCharacterSelectEl = document.getElementById('comfy-test-character');
 
   let editingSlug = null;
   let loadToken = 0;
   let comfySettingsLoaded = false;
+  let comfyUiState = null;
+  let comfyCharacters = [];
 
   // ── Navigation ──────────────────────────────────────────────
 
@@ -122,11 +125,61 @@ const Settings = (() => {
     }
   }
 
+  function splitIdValue(value) {
+    return String(value || '')
+      .split(',')
+      .map(item => item.trim())
+      .filter(Boolean);
+  }
+
+  function setIdInputValue(inputId, values) {
+    document.getElementById(inputId).value = Array.from(new Set(values)).join(', ');
+  }
+
+  function ensureDefaultComfyTestInputs() {
+    const clothingEl = document.getElementById('comfy-test-clothing');
+    const locationEl = document.getElementById('comfy-test-location');
+    const actionEl = document.getElementById('comfy-test-action');
+
+    if (clothingEl && !clothingEl.value.trim()) {
+      clothingEl.value = 'black lace bra and emerald thong';
+    }
+    if (locationEl && !locationEl.value.trim()) {
+      locationEl.value = 'leaning against the bedroom mirror';
+    }
+    if (actionEl && !actionEl.value.trim()) {
+      actionEl.value = 'She is standing, facing the camera, waist-up mirror selfie with one hand on her hip';
+    }
+  }
+
+  function getSelectedComfyCharacterSlug() {
+    if (!comfyCharacterSelectEl) return '';
+
+    const directValue = String(comfyCharacterSelectEl.value || '').trim();
+    if (directValue) return directValue;
+
+    const selectedOption = comfyCharacterSelectEl.selectedOptions?.[0];
+    const optionSlug = String(selectedOption?.dataset?.slug || '').trim();
+    if (optionSlug) return optionSlug;
+
+    const selectedText = String(selectedOption?.textContent || '').trim();
+    if (!selectedText) return '';
+
+    const match = comfyCharacters.find(character => String(character.name || '').trim() === selectedText);
+    return match?.slug || '';
+  }
+
+  function appendNodeId(inputId, nodeId) {
+    const current = splitIdValue(document.getElementById(inputId).value);
+    if (!current.includes(String(nodeId))) current.push(String(nodeId));
+    setIdInputValue(inputId, current);
+  }
+
   function renderWorkflowNodes(nodes = []) {
     if (!workflowNodesEl) return;
 
     if (!nodes.length) {
-      workflowNodesEl.innerHTML = '<div class="workflow-node-empty">No titled nodes found in the shared workflow yet.</div>';
+      workflowNodesEl.innerHTML = '<div class="workflow-node-empty">No workflow nodes found yet. Upload or refresh the shared workflow to inspect bindable nodes.</div>';
       return;
     }
 
@@ -134,10 +187,33 @@ const Settings = (() => {
     for (const node of nodes) {
       const row = document.createElement('div');
       row.className = 'workflow-node-item';
+      const actions = [];
+      if (node.prompt_eligible) {
+        actions.push(`<button type="button" class="workflow-node-action" data-bind-target="prompt" data-node-id="${escapeHtml(String(node.id || ''))}">Prompt</button>`);
+      }
+      if (node.reference_eligible) {
+        actions.push(`<button type="button" class="workflow-node-action" data-bind-target="reference" data-node-id="${escapeHtml(String(node.id || ''))}">Reference</button>`);
+      }
+      if (node.seed_eligible) {
+        actions.push(`<button type="button" class="workflow-node-action" data-bind-target="seed" data-node-id="${escapeHtml(String(node.id || ''))}">Seed</button>`);
+      }
+
       row.innerHTML = `
-        <div class="workflow-node-title">${escapeHtml(node.title || '(Untitled)')}</div>
-        <div class="workflow-node-meta">${escapeHtml(node.class_type || 'Unknown')}<br>#${escapeHtml(String(node.id || ''))}</div>
+        <div class="workflow-node-main">
+          <div class="workflow-node-title">${escapeHtml(node.title || '(Untitled)')}</div>
+          <div class="workflow-node-meta">${escapeHtml(node.class_type || 'Unknown')}<br>#${escapeHtml(String(node.id || ''))}</div>
+        </div>
+        <div class="workflow-node-actions">${actions.join('')}</div>
       `;
+      row.querySelectorAll('[data-bind-target]').forEach(button => {
+        button.addEventListener('click', () => {
+          const nodeId = button.dataset.nodeId;
+          const target = button.dataset.bindTarget;
+          if (target === 'prompt') appendNodeId('comfy-prompt-node-ids', nodeId);
+          if (target === 'reference') appendNodeId('comfy-reference-node-ids', nodeId);
+          if (target === 'seed') appendNodeId('comfy-seed-node-ids', nodeId);
+        });
+      });
       workflowNodesEl.appendChild(row);
     }
   }
@@ -151,6 +227,151 @@ const Settings = (() => {
       .replace(/'/g, '&#39;');
   }
 
+  function escapeAttr(value) {
+    return escapeHtml(value).replace(/"/g, '&quot;');
+  }
+
+  function setButtonBusy(button, busyLabel) {
+    if (!button) return () => {};
+    const originalLabel = button.textContent;
+    button.disabled = true;
+    button.textContent = busyLabel;
+    return () => {
+      button.disabled = false;
+      button.textContent = originalLabel;
+    };
+  }
+
+  function formatDateTime(timestamp) {
+    if (!timestamp) return '';
+    try {
+      return new Date(timestamp).toLocaleString();
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function renderServerStatus(data) {
+    const el = document.getElementById('comfy-server-status');
+    const effectiveUrl = data?.effective_server_url || 'Not set';
+    const validation = data?.last_validation || null;
+    const serverCheck = validation?.checks?.find(check => check.key === 'server');
+    const statusClass = serverCheck ? (serverCheck.ok ? 'ok' : 'error') : 'neutral';
+    const statusLabel = serverCheck ? (serverCheck.ok ? 'Reachable' : 'Unreachable') : 'Not tested yet';
+    const checkedAt = validation?.checked_at ? `Last checked ${escapeHtml(formatDateTime(validation.checked_at))}` : 'Run dry validation to test the selected server.';
+
+    el.className = `workflow-status-card ${statusClass}`;
+    el.innerHTML = `
+      <div class="workflow-status-line"><strong>Active server:</strong> ${escapeHtml(effectiveUrl)}</div>
+      <div class="workflow-status-line"><strong>Status:</strong> ${escapeHtml(statusLabel)}</div>
+      <div class="workflow-status-line workflow-status-muted">${checkedAt}</div>
+    `;
+  }
+
+  function renderWorkflowStatus(data) {
+    const el = document.getElementById('comfy-workflow-status');
+    const status = data?.workflow_status || {};
+    const exists = !!status.exists;
+    const nodes = Number(status.node_count || 0);
+    const titled = Number(status.titled_node_count || 0);
+    const updatedAt = status.updated_at ? formatDateTime(status.updated_at) : '';
+    el.className = `workflow-status-card ${exists ? 'ok' : 'warning'}`;
+    el.innerHTML = exists
+      ? `
+        <div class="workflow-status-line"><strong>${escapeHtml(status.filename || 'workflow.json')}</strong> is active.</div>
+        <div class="workflow-status-line">${nodes} total nodes, ${titled} titled nodes detected.</div>
+        <div class="workflow-status-line workflow-status-muted">${updatedAt ? `Updated ${escapeHtml(updatedAt)}` : 'Shared workflow file is ready.'}</div>
+      `
+      : `
+        <div class="workflow-status-line"><strong>No shared workflow uploaded yet.</strong></div>
+        <div class="workflow-status-line workflow-status-muted">Upload a ComfyUI API workflow JSON here to manage everything inside the app.</div>
+      `;
+  }
+
+  function renderValidationResult(validation) {
+    const summaryEl = document.getElementById('comfy-validation-summary');
+    const resultsEl = document.getElementById('comfy-validation-results');
+    const promptEl = document.getElementById('comfy-validation-prompt-preview');
+
+    if (!validation) {
+      summaryEl.className = 'workflow-validation-summary';
+      summaryEl.textContent = 'No validation run yet.';
+      resultsEl.innerHTML = '';
+      promptEl.value = '';
+      return;
+    }
+
+    summaryEl.className = `workflow-validation-summary ${validation.ok ? 'ok' : 'error'}`;
+    summaryEl.innerHTML = `
+      <div class="workflow-validation-summary-main">${escapeHtml(validation.summary || (validation.ok ? 'Validation passed.' : 'Validation failed.'))}</div>
+      <div class="workflow-validation-summary-sub">${escapeHtml(validation.server_url || '')}${validation.checked_at ? ` • ${escapeHtml(formatDateTime(validation.checked_at))}` : ''}</div>
+    `;
+
+    resultsEl.innerHTML = (validation.checks || []).map(check => `
+      <div class="workflow-check ${check.ok ? 'ok' : 'error'}">
+        <div class="workflow-check-header">
+          <span class="workflow-check-dot"></span>
+          <strong>${escapeHtml(check.label || check.key || 'Check')}</strong>
+        </div>
+        <div class="workflow-check-message">${escapeHtml(check.message || '')}</div>
+        ${check.detail ? `<pre class="workflow-check-detail">${escapeHtml(JSON.stringify(check.detail, null, 2))}</pre>` : ''}
+      </div>
+    `).join('');
+
+    promptEl.value = validation.prompt_preview || '';
+  }
+
+  async function populateComfyCharacterOptions(selectedSlug = '') {
+    if (!comfyCharacterSelectEl) return;
+
+    const currentValue = selectedSlug || comfyCharacterSelectEl.value;
+    try {
+      const res = await fetch('/api/admin/characters');
+      const chars = await res.json();
+      if (!res.ok) throw new Error(chars.error || 'Failed to load characters');
+      comfyCharacters = Array.isArray(chars) ? chars : [];
+
+      comfyCharacterSelectEl.innerHTML = '<option value="">Select a character</option>';
+      for (const character of comfyCharacters) {
+        const option = document.createElement('option');
+        option.value = character.slug;
+        option.dataset.slug = character.slug;
+        option.textContent = character.name;
+        if (character.slug === currentValue) option.selected = true;
+        comfyCharacterSelectEl.appendChild(option);
+      }
+
+      if (!comfyCharacterSelectEl.value && comfyCharacters.length) {
+        comfyCharacterSelectEl.value = comfyCharacters[0].slug;
+      }
+    } catch (_) {
+      comfyCharacters = [];
+      comfyCharacterSelectEl.innerHTML = '<option value="">Unable to load characters</option>';
+    }
+  }
+
+  function applyComfyUiPayload(data, { markLoaded = true, selectedCharacterSlug = '' } = {}) {
+    comfyUiState = data || null;
+
+    document.getElementById('comfy-server-url').value = data?.settings?.server_url || '';
+    document.getElementById('comfy-prompt-node-ids').value = (data?.settings?.prompt_node_ids || []).join(', ');
+    document.getElementById('comfy-reference-node-ids').value = (data?.settings?.reference_image_node_ids || []).join(', ');
+    document.getElementById('comfy-seed-node-ids').value = (data?.settings?.seed_node_ids || []).join(', ');
+
+    renderServerStatus(data);
+    renderWorkflowStatus(data);
+    renderWorkflowNodes(data?.workflow_nodes || []);
+    renderValidationResult(data?.last_validation || null);
+    ensureDefaultComfyTestInputs();
+    populateComfyCharacterOptions(
+      selectedCharacterSlug
+      || data?.last_validation?.selected_character_slug
+      || ''
+    );
+
+    if (markLoaded) comfySettingsLoaded = true;
+  }
+
   async function loadComfyUiSettings(force = false) {
     if (comfySettingsLoaded && !force) return;
 
@@ -160,28 +381,27 @@ const Settings = (() => {
       const res = await fetch('/api/admin/comfyui-settings');
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load ComfyUI settings');
-
-      document.getElementById('comfy-prompt-node-ids').value = (data.settings?.prompt_node_ids || []).join(', ');
-      document.getElementById('comfy-reference-node-ids').value = (data.settings?.reference_image_node_ids || []).join(', ');
-      document.getElementById('comfy-seed-node-ids').value = (data.settings?.seed_node_ids || []).join(', ');
-      renderWorkflowNodes(data.workflow_nodes || []);
-      comfySettingsLoaded = true;
+      applyComfyUiPayload(data);
     } catch (err) {
       workflowNodesEl.innerHTML = `<div class="workflow-node-empty">Error loading workflow nodes: ${escapeHtml(err.message)}</div>`;
+      renderValidationResult(null);
+      document.getElementById('comfy-server-status').className = 'workflow-status-card error';
+      document.getElementById('comfy-server-status').textContent = `Error loading image system settings: ${err.message}`;
+      document.getElementById('comfy-workflow-status').className = 'workflow-status-card error';
+      document.getElementById('comfy-workflow-status').textContent = 'Unable to load workflow status.';
     }
   }
 
-  async function saveComfyUiSettings() {
-    const btn = document.getElementById('btn-comfyui-save');
-    const originalLabel = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = 'Saving...';
+  async function saveComfyUiSettings(options = {}) {
+    const btn = options.button || document.getElementById('btn-comfyui-save');
+    const releaseButton = options.skipButtonState ? () => {} : setButtonBusy(btn, options.busyLabel || 'Saving...');
 
     try {
       const res = await fetch('/api/admin/comfyui-settings', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          server_url: document.getElementById('comfy-server-url').value.trim(),
           prompt_node_ids: document.getElementById('comfy-prompt-node-ids').value.trim(),
           reference_image_node_ids: document.getElementById('comfy-reference-node-ids').value.trim(),
           seed_node_ids: document.getElementById('comfy-seed-node-ids').value.trim(),
@@ -190,15 +410,78 @@ const Settings = (() => {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to save ComfyUI settings');
 
-      document.getElementById('comfy-prompt-node-ids').value = (data.settings?.prompt_node_ids || []).join(', ');
-      document.getElementById('comfy-reference-node-ids').value = (data.settings?.reference_image_node_ids || []).join(', ');
-      document.getElementById('comfy-seed-node-ids').value = (data.settings?.seed_node_ids || []).join(', ');
-      renderWorkflowNodes(data.workflow_nodes || []);
+      applyComfyUiPayload(data, {
+        selectedCharacterSlug: getSelectedComfyCharacterSlug(),
+      });
+      return data;
     } catch (err) {
-      alert(`ComfyUI settings failed to save: ${err.message}`);
+      if (!options.quiet) {
+        alert(`ComfyUI settings failed to save: ${err.message}`);
+      }
+      throw err;
     } finally {
-      btn.disabled = false;
-      btn.textContent = originalLabel;
+      releaseButton();
+    }
+  }
+
+  async function uploadComfyWorkflow() {
+    const input = document.getElementById('comfy-workflow-upload');
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+
+    const releaseButton = setButtonBusy(document.getElementById('btn-comfyui-upload'), 'Uploading...');
+    try {
+      const formData = new FormData();
+      formData.append('workflow', file);
+      const res = await fetch('/api/admin/comfyui-workflow', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to upload workflow');
+      applyComfyUiPayload(data);
+    } catch (err) {
+      alert(`Workflow upload failed: ${err.message}`);
+    } finally {
+      releaseButton();
+    }
+  }
+
+  async function validateComfyUiSettings() {
+    const button = document.getElementById('btn-comfyui-validate');
+    const releaseButton = setButtonBusy(button, 'Validating...');
+
+    try {
+      const selectedCharacterSlug = getSelectedComfyCharacterSlug();
+      const sampleClothing = document.getElementById('comfy-test-clothing').value.trim();
+      const sampleLocation = document.getElementById('comfy-test-location').value.trim();
+      const sampleAction = document.getElementById('comfy-test-action').value.trim();
+
+      await saveComfyUiSettings({
+        quiet: true,
+        skipButtonState: true,
+      });
+
+      const payload = {
+        selected_character_slug: selectedCharacterSlug,
+        sample_clothing: sampleClothing,
+        sample_location: sampleLocation,
+        sample_action: sampleAction,
+      };
+
+      const res = await fetch('/api/admin/comfyui-settings/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to validate image system');
+      applyComfyUiPayload(data, { selectedCharacterSlug });
+    } catch (err) {
+      alert(`Image setup validation failed: ${err.message}`);
+    } finally {
+      releaseButton();
     }
   }
 
@@ -743,6 +1026,14 @@ const Settings = (() => {
     });
     document.getElementById('btn-comfyui-refresh').addEventListener('click', () => loadComfyUiSettings(true));
     document.getElementById('btn-comfyui-save').addEventListener('click', saveComfyUiSettings);
+    document.getElementById('btn-comfyui-download').addEventListener('click', () => {
+      window.location.href = '/api/admin/comfyui-workflow';
+    });
+    document.getElementById('btn-comfyui-upload').addEventListener('click', () => {
+      document.getElementById('comfy-workflow-upload').click();
+    });
+    document.getElementById('comfy-workflow-upload').addEventListener('change', uploadComfyWorkflow);
+    document.getElementById('btn-comfyui-validate').addEventListener('click', validateComfyUiSettings);
     document.getElementById('btn-form-back').addEventListener('click', closeForm);
     document.getElementById('btn-form-save').addEventListener('click', saveForm);
     document.getElementById('btn-delete-char').addEventListener('click', deleteCharacter);

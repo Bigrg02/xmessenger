@@ -17,6 +17,7 @@ const Chat = (() => {
   const imagePreview = document.getElementById('chat-image-preview');
   const imageCaption = document.getElementById('chat-image-caption');
   const imageError = document.getElementById('chat-image-error');
+  const chatImageStatus = document.getElementById('chat-image-status');
   const imageCancelBtn = document.getElementById('btn-chat-image-cancel');
   const imageCloseBtn = document.getElementById('btn-chat-image-close');
   const imageSendBtn = document.getElementById('btn-chat-image-send');
@@ -288,6 +289,7 @@ const Chat = (() => {
     manualImagePending = pending;
     sceneBtn.disabled = pending || !App.getSession();
     sceneBtn.title = pending ? 'Generating scene image...' : 'Generate Scene Image';
+    chatImageStatus.classList.toggle('hidden', !pending);
   }
 
   async function sendMessage(content, isVoice = false) {
@@ -1033,6 +1035,11 @@ const Chat = (() => {
     } else if (e.key === '-' && !lightbox.classList.contains('hidden')) {
       setLightboxZoom(lightboxZoom - 0.25);
     }
+  });
+
+  document.getElementById('chat-header-info').addEventListener('click', () => {
+    if (!App.getSession() || manualImagePending) return;
+    requestManualSceneImage();
   });
 
   bindDeviceSheetEvents();

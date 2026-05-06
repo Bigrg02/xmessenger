@@ -8,6 +8,9 @@ const AdmZip = require('adm-zip');
 const { normalizeCard, normalizeGeneratedDraft, splitList } = require('../modules/characterCard');
 const llmClient = require('../modules/llmClient');
 const comfyuiSettings = require('../modules/comfyuiSettings');
+const imageGenerator = require('../modules/imageGenerator');
+const CHARS_DIR = path.join(__dirname, '../../characters');
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
 // Cache model list for 5 minutes
 let modelsCache = null;
@@ -44,9 +47,13 @@ router.get('/models', async (req, res) => {
 });
 
 router.get('/comfyui-settings', (req, res) => {
+  const settings = comfyuiSettings.readSettings();
   res.json({
-    settings: comfyuiSettings.readSettings(),
+    settings,
+    effective_server_url: comfyuiSettings.getEffectiveServerUrl(settings),
     workflow_nodes: comfyuiSettings.listWorkflowNodes(),
+    workflow_status: comfyuiSettings.getWorkflowStatus(),
+    last_validation: settings.last_validation || null,
   });
 });
 
@@ -56,15 +63,230 @@ router.patch('/comfyui-settings', (req, res) => {
     res.json({
       ok: true,
       settings,
+      effective_server_url: comfyuiSettings.getEffectiveServerUrl(settings),
       workflow_nodes: comfyuiSettings.listWorkflowNodes(),
+      workflow_status: comfyuiSettings.getWorkflowStatus(),
+      last_validation: settings.last_validation || null,
     });
   } catch (err) {
     res.status(400).json({ error: err.message || 'Failed to save ComfyUI settings' });
   }
 });
 
-const CHARS_DIR = path.join(__dirname, '../../characters');
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
+router.get('/comfyui-workflow', (req, res) => {
+  if (!fs.existsSync(comfyuiSettings.SHARED_WORKFLOW_PATH)) {
+    return res.status(404).json({ error: 'No shared workflow uploaded yet.' });
+  }
+
+  res.download(comfyuiSettings.SHARED_WORKFLOW_PATH, path.basename(comfyuiSettings.SHARED_WORKFLOW_PATH));
+});
+
+router.post('/comfyui-workflow', upload.single('workflow'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'workflow file required' });
+
+  try {
+    comfyuiSettings.writeWorkflowBuffer(req.file.buffer);
+    const settings = comfyuiSettings.readSettings();
+    res.json({
+      ok: true,
+      settings,
+      effective_server_url: comfyuiSettings.getEffectiveServerUrl(settings),
+      workflow_nodes: comfyuiSettings.listWorkflowNodes(),
+      workflow_status: comfyuiSettings.getWorkflowStatus(),
+      last_validation: settings.last_validation || null,
+    });
+  } catch (err) {
+    res.status(400).json({ error: err.message || 'Failed to upload workflow' });
+  }
+});
+
+function findNodeMatches(nodes, ids = []) {
+  const normalizedIds = (ids || []).map(id => String(id || '').trim()).filter(Boolean);
+  return nodes
+    .filter(node => normalizedIds.some(configured => node.id === configured || String(node.id).endsWith(`:${configured}`)))
+    .map(node => node.id);
+}
+
+async function validateImageSystem(settings, payload = {}) {
+  const serverUrl = comfyuiSettings.getEffectiveServerUrl(settings);
+  const checks = [];
+  let workflow = null;
+
+  try {
+    await axios.get(`${serverUrl}/system_stats`, { timeout: 10000 });
+    checks.push({
+      key: 'server',
+      label: 'Image server reachable',
+      ok: true,
+      message: `Connected to ${serverUrl}`,
+      detail: { server_url: serverUrl },
+    });
+  } catch (err) {
+    checks.push({
+      key: 'server',
+      label: 'Image server reachable',
+      ok: false,
+      message: err.message || 'Failed to reach image server',
+      detail: { server_url: serverUrl },
+    });
+  }
+
+  try {
+    workflow = comfyuiSettings.readWorkflow();
+    if (!workflow) throw new Error('No shared workflow file uploaded yet.');
+    checks.push({
+      key: 'workflow',
+      label: 'Workflow file',
+      ok: true,
+      message: `Loaded ${Object.keys(workflow).length} workflow nodes`,
+      detail: comfyuiSettings.getWorkflowStatus(),
+    });
+  } catch (err) {
+    checks.push({
+      key: 'workflow',
+      label: 'Workflow file',
+      ok: false,
+      message: err.message || 'Failed to load workflow',
+      detail: comfyuiSettings.getWorkflowStatus(),
+    });
+  }
+
+  const workflowNodes = comfyuiSettings.listWorkflowNodes();
+  const promptMatches = findNodeMatches(workflowNodes, settings.prompt_node_ids);
+  const referenceMatches = findNodeMatches(workflowNodes, settings.reference_image_node_ids);
+  const seedMatches = findNodeMatches(workflowNodes, settings.seed_node_ids);
+
+  checks.push({
+    key: 'prompt_binding',
+    label: 'Prompt node binding',
+    ok: Boolean(promptMatches.length),
+    message: promptMatches.length
+      ? `Matched prompt nodes: ${promptMatches.join(', ')}`
+      : 'No configured prompt node IDs matched the current workflow',
+    detail: { configured: settings.prompt_node_ids, matched: promptMatches },
+  });
+
+  checks.push({
+    key: 'reference_binding',
+    label: 'Reference image binding',
+    ok: Boolean(referenceMatches.length),
+    message: referenceMatches.length
+      ? `Matched reference image nodes: ${referenceMatches.join(', ')}`
+      : 'No configured reference image node IDs matched the current workflow',
+    detail: { configured: settings.reference_image_node_ids, matched: referenceMatches },
+  });
+
+  checks.push({
+    key: 'seed_binding',
+    label: 'Seed node binding',
+    ok: !settings.seed_node_ids.length || Boolean(seedMatches.length),
+    message: settings.seed_node_ids.length
+      ? (seedMatches.length ? `Matched seed nodes: ${seedMatches.join(', ')}` : 'No configured seed node IDs matched the current workflow')
+      : 'No explicit seed node IDs configured; runtime auto-detection will be used',
+    detail: { configured: settings.seed_node_ids, matched: seedMatches },
+  });
+
+  let selectedCharacterSlug = String(
+    payload.selected_character_slug
+    || payload.character_slug
+    || ''
+  ).trim().toLowerCase();
+  if (!selectedCharacterSlug) {
+    selectedCharacterSlug = listCharacterSlugs()[0] || '';
+  }
+  let promptPreview = '';
+  if (selectedCharacterSlug) {
+    try {
+      const card = readCard(selectedCharacterSlug);
+      if (!card) throw new Error('Character not found');
+      const referencePath = imageGenerator.selectReferenceImage(card, selectedCharacterSlug);
+      checks.push({
+        key: 'reference_image',
+        label: 'Character reference image',
+        ok: true,
+        message: `Reference image found for ${card.name}`,
+        detail: { character_slug: selectedCharacterSlug, path: referencePath },
+      });
+
+      if (!String(card.appearance_prompt || '').trim()) {
+        throw new Error('Character appearance prompt is blank');
+      }
+
+      const sampleScene = {
+        clothing: String(payload.sample_clothing || '').trim() || 'black lace bra and emerald thong',
+        location: String(payload.sample_location || '').trim() || 'leaning against the bedroom mirror',
+        action: String(payload.sample_action || '').trim() || 'She is standing, facing the camera, waist-up mirror selfie with one hand on her hip',
+      };
+      promptPreview = imageGenerator.buildImagePrompt(card.appearance_prompt, sampleScene);
+      checks.push({
+        key: 'appearance_prompt',
+        label: 'Appearance prompt',
+        ok: true,
+        message: 'Appearance prompt available and sample prompt assembled',
+        detail: { character_slug: selectedCharacterSlug },
+      });
+
+      if (workflow) {
+        imageGenerator.injectWorkflowBindings(workflow, promptPreview, { name: 'reference.png' }, settings);
+        checks.push({
+          key: 'binding_simulation',
+          label: 'Dry binding simulation',
+          ok: true,
+          message: 'Workflow accepted the current prompt/reference/seed bindings',
+          detail: null,
+        });
+      }
+    } catch (err) {
+      checks.push({
+        key: 'reference_image',
+        label: 'Character/reference dry check',
+        ok: false,
+        message: err.message || 'Failed character image setup check',
+        detail: { character_slug: selectedCharacterSlug },
+      });
+    }
+  } else {
+    checks.push({
+      key: 'reference_image',
+      label: 'Character reference image',
+      ok: false,
+      message: 'No characters are available yet. Create or import a character to validate reference image and prompt assembly.',
+      detail: null,
+    });
+  }
+
+  const ok = checks.every(check => check.ok || check.key === 'seed_binding');
+  const result = {
+    checked_at: Date.now(),
+    ok,
+    summary: ok ? 'Image system dry checks passed.' : 'Image system has setup issues to fix.',
+    checks,
+    server_url: serverUrl,
+    prompt_preview: promptPreview,
+    selected_character_slug: selectedCharacterSlug,
+  };
+
+  comfyuiSettings.updateLastValidation(result);
+  return result;
+}
+
+router.post('/comfyui-settings/validate', async (req, res) => {
+  try {
+    const settings = comfyuiSettings.readSettings();
+    const validation = await validateImageSystem(settings, req.body || {});
+    const freshSettings = comfyuiSettings.readSettings();
+    res.json({
+      ok: true,
+      settings: freshSettings,
+      effective_server_url: comfyuiSettings.getEffectiveServerUrl(freshSettings),
+      workflow_nodes: comfyuiSettings.listWorkflowNodes(),
+      workflow_status: comfyuiSettings.getWorkflowStatus(),
+      last_validation: validation,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Failed to validate image system' });
+  }
+});
 
 function slugify(name) {
   return name.toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
@@ -81,6 +303,14 @@ function readCard(slug) {
   const p = path.join(CHARS_DIR, slug, 'card.json');
   if (!fs.existsSync(p)) return null;
   try { return normalizeCard(JSON.parse(fs.readFileSync(p, 'utf8'))); } catch { return null; }
+}
+
+function listCharacterSlugs() {
+  if (!fs.existsSync(CHARS_DIR)) return [];
+  return fs.readdirSync(CHARS_DIR)
+    .filter(d => fs.statSync(path.join(CHARS_DIR, d)).isDirectory())
+    .filter(slug => !!readCard(slug))
+    .sort((a, b) => a.localeCompare(b));
 }
 
 function writeCard(slug, card) {

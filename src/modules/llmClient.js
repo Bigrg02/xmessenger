@@ -133,7 +133,7 @@ function looksLikeVisualRequest(text) {
 
 function looksLikeVisualScene(text) {
   if (!text) return false;
-  return /\b(turning around|back view|view from behind|looking over (her|my) shoulder|mirror selfie|selfie|bent over|legs apart|on all fours|lifting (the )?(dress|skirt|hem)|panties|thong|bra|topless|bottomless|nude|spread|showing you|for you|facing the camera|back to the camera|close[- ]up|waist-up|full-body)\b/i.test(text);
+  return /\b(turning around|back view|view from behind|looking over (her|my) shoulder|mirror selfie|selfie|bent over|legs apart|on all fours|lifting (the )?(dress|skirt|hem)|panties|thong|bra|topless|bottomless|nude|spread|showing you|for you|facing the camera|back to the camera|close[- ]up|waist-up|full-body|lingerie|bikini|bodysuit|stockings|heels|kneeling|arching|posing|looking back|leaning|straddl|dripping|flushed|breathless|reaching back|pulling (down|up|off|aside)|slipping off|unclipping|unhooking|stepping out of|dropping (the|my)|revealing|exposing|my chest|my hips|my waist|my thighs|between (my|her) legs|fingers (inside|in)|hands on (my|her))\b/i.test(text);
 }
 
 function getImageContextText(msg) {
@@ -465,11 +465,13 @@ When image_request.send is true:
 - instead, choose one clean state: the outer garment fully covers it, or the outer garment is explicitly pulled down, lifted, or moved aside enough to fully expose it
 - if any piece was removed, clothing must say that explicitly using terms like topless, bottomless, nude, bra off, or panties off instead of silently omitting the item
 - location should describe where the photo is taken
-- action must explicitly include all three of these:
+- action must explicitly include all four of these:
   1. body position or pose, such as standing, sitting, lounging, kneeling, lying back, on all fours, or leaning in
   2. facing direction, such as facing the camera, back to the camera, turned three-quarters over her shoulder, or side profile
   3. framing or camera angle, such as full-body shot, waist-up mirror selfie, close-up, medium shot, or shot from behind
+  4. facial expression or emotional look, such as playful smile, teasing smirk, flushed and breathless, shy glance, sultry look, or bright grin
 - action should also describe what she is doing
+- do not leave her expression blank or neutral; give the image a clear emotional expression
 - avoid partial-reveal wording like "peeking out" or "just showing"; choose one clean visual state instead
 - never combine mutually conflicting views in one image; pick one consistent angle
 - let core_desires, turn_ons, and kinks subtly influence the scene choice when the conversation is warm or explicit
@@ -750,15 +752,16 @@ For action, explicitly state:
 - her body position or pose
 - which direction she is facing relative to the camera
 - the framing or camera angle
-Do not leave any of those implied, and do not combine conflicting front-and-back views in one image.
+- her facial expression or emotional look
+Do not leave any of those implied, do not leave her expression blank or neutral, and do not combine conflicting front-and-back views in one image.
 If a current clothing continuity is provided, reuse it unless the latest assistant reply clearly changes outfits.
 
-Only return a photo request if the latest assistant reply describes a vivid, visual, or sexy moment that would make sense to show as an image.
-If the scene is too weak or vague, return send=false.
+Always return a photo request with send=true. The user manually requested this image so always generate one.
+Use the conversation to infer the best possible scene. If the latest reply lacks detail, extrapolate from the character's personality and the conversation tone.
 
 Return only valid JSON:
 {
-  "send": false,
+  "send": true,
   "clothing": "",
   "location": "",
   "action": ""
@@ -823,12 +826,19 @@ function shouldUseAutoImageFallback(userMessage, assistantMessage, imageRequest 
 
   const userAskedToSee = looksLikeVisualRequest(userMessage);
   const assistantIsVisual = looksLikeVisualScene(assistantMessage);
+
+  // User explicitly asked to see something and assistant described a visual scene
   if (userAskedToSee && assistantIsVisual) return true;
 
+  // Assistant used a strong "sending you something" phrase with explicit content
   const strongVisualCombo = assistantIsVisual
     && /\b(for you|here it is|turning around|showing you|back view|mirror selfie)\b/i.test(assistantMessage || '');
+  if (strongVisualCombo && looksExplicit(assistantMessage)) return true;
 
-  return strongVisualCombo && looksExplicit(assistantMessage);
+  // Organic visual scene — assistant wrote a substantial visual description unprompted
+  if (assistantIsVisual && (assistantMessage || '').length > 120) return true;
+
+  return false;
 }
 
 module.exports = {

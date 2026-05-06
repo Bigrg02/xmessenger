@@ -34,7 +34,7 @@ Required:
 
 Optional but supported:
 
-- [ComfyUI](https://github.com/comfyanonymous/ComfyUI) at `http://localhost:8188`
+- [ComfyUI](https://github.com/comfyanonymous/ComfyUI) at `http://localhost:8188` or any reachable LAN URL such as `http://192.168.1.50:8188`
 - [faster-whisper-server](https://github.com/fedirz/faster-whisper-server) at `http://localhost:8000`
 - [Lovense Remote](https://www.lovense.com/remote) or Lovense Connect for toy pairing
 - `LOVENSE_DEVELOPER_TOKEN` for the Lovense web pairing flow
@@ -150,7 +150,7 @@ The app also supports expanded adult-profile fields such as `backstory`, `relati
 
 ## Character Tone Model
 
-Character tone is no longer driven only by “was the recent chat explicit.” The runtime now separates:
+Character tone is no longer driven only by "was the recent chat explicit." The runtime now separates:
 
 - always-on relationship feel, led by `core_desires`
 - warm/explicit scene expression, influenced by `sexual_personality`, `turn_ons`, `kinks`, and `aftercare_style`
@@ -161,29 +161,83 @@ In practice this means:
 - `core_desires` should shape the emotional feel of the relationship all the time
 - `turn_ons` and `kinks` show up more as recurring motifs in warm or explicit scenes
 - practical questions after explicit messages should still be answered directly, with only light chemistry layered in when appropriate
-- image and toy behavior now follow the same tone-routing logic instead of staying “hot forever”
+- image and toy behavior now follow the same tone-routing logic instead of staying "hot forever"
 
-## Shared ComfyUI Workflow
+## In-App Image System
 
-Image generation now uses one shared workflow file:
+Image generation still uses one shared ComfyUI workflow, but the setup is now managed from the Settings screen instead of by editing files directly.
+
+Current in-app image setup supports:
+
+- `Active Image Server URL`
+- shared workflow JSON upload/replacement
+- workflow download/export
+- prompt node binding by node ID
+- reference image node binding by node ID
+- optional seed node binding by node ID
+- dry validation without running a real render
+
+Runtime precedence:
+
+- saved in-app image server URL wins first
+- if no saved URL exists, the app falls back to `COMFYUI_BASE_URL`
+- if no uploaded workflow exists but a shared workflow file is already on disk, the app continues using it
+
+Because the backend is the ComfyUI client, LAN-hosted ComfyUI works as long as the xMessage server host can reach that URL. Browser CORS is not the limiting factor.
+
+Shared workflow path:
 
 - [workflows/comfyui/workflow.json](/C:/dev/Xmessenger/workflows/comfyui/workflow.json)
 
-The app injects each character's `appearance_prompt` plus the scene request into matching `CLIPTextEncode` nodes, and uploads the character reference image into the configured workflow image-loader node.
+The app injects each character's `appearance_prompt` plus the scene request into configured `CLIPTextEncode` nodes, and uploads the selected character reference image into the configured workflow image-loader node.
 
-ComfyUI bindings are now configurable from Settings:
+Configurable bindings:
 
 - `Prompt Node IDs`
 - `Reference Image Node IDs`
 - `Seed Node IDs`
 
-Those values should use the exported ComfyUI node IDs from your shared workflow. The workflow settings screen also shows a live list of titled nodes and IDs found in the current shared workflow so you can target them without editing code.
-If `Seed Node IDs` is left blank, xMessage will still try to auto-randomize common `seed` or `noise_seed` inputs it finds, so regenerate runs do not keep producing the same image.
+Notes:
 
-Backward compatibility:
-
-- If the shared workflow file is missing, the app still falls back to an old character-specific workflow path if one exists.
+- The Settings screen shows the parsed workflow node list with IDs, class types, and quick-pick buttons.
+- If `Seed Node IDs` is blank, xMessage still auto-randomizes common `seed` or `noise_seed` inputs it finds, so regenerate runs do not keep producing the same image.
 - New character scaffolds no longer create per-character ComfyUI workflow folders by default.
+
+## Image Behavior
+
+The image system now supports both character-timed and manual scene generation:
+
+- automatic photo sends when the model explicitly requests one
+- a manual `Scene` button in chat
+- tapping the avatar/name area in the chat header also triggers manual scene generation
+- a small `Generating photo...` spinner appears in the chat header while a manual photo request is in flight
+
+Image prompts are assembled into a fixed template with:
+
+- `Body`
+- `Clothing`
+- `Location`
+- `Action`
+
+Current prompt rules:
+
+- clothing continuity is stored per session and reused unless the outfit clearly changes
+- every visible clothing piece should include a color
+- partial underwear peek states are rewritten into clearly hidden or clearly exposed states for Flux-style consistency
+- removed clothing must be explicit, such as `topless`, `bottomless`, `bra off`, or `panties off`
+- `Action` now explicitly includes:
+  - pose
+  - facing direction
+  - framing/camera angle
+  - facial expression or emotional look
+- if expression is omitted, the backend adds a fallback expression so images do not default to blank stares
+
+The image lightbox also supports:
+
+- prompt inspection
+- regenerate in place
+- zoom controls
+- scroll for tall images
 
 ## Main API Surfaces
 
@@ -198,6 +252,9 @@ Backward compatibility:
 - `POST /api/devices/lovense/pairing/disconnect`
 - `GET /api/admin/comfyui-settings`
 - `PATCH /api/admin/comfyui-settings`
+- `POST /api/admin/comfyui-settings/validate`
+- `GET /api/admin/comfyui-workflow`
+- `POST /api/admin/comfyui-workflow`
 
 ## Development Notes
 
@@ -206,7 +263,8 @@ Backward compatibility:
 - The LLM still returns the same high-level JSON contract, with structured `toy_control` added for device-mode choreography.
 - The JSON parser in `llmClient` now extracts the first complete JSON object from model output so device-mode replies with trailing junk do not break chat.
 - Adult profile is now split internally into an always-on relationship desire layer and a warm/explicit scene escalation layer.
-- Automatic image sending is gated by the current turn’s inferred tone, so visual requests still trigger easily while normal-topic turns suppress stray photo sends.
+- Automatic image sending is gated by the current turn's inferred tone, so visual requests still trigger easily while normal-topic turns suppress stray photo sends.
+- The Settings screen now includes a full in-app image-system setup and dry-validation surface.
 - Session reload now restores the newest 100 messages in chronological order rather than the oldest 100, so late-thread messages persist visibly after refresh.
 
 ## Known Limits

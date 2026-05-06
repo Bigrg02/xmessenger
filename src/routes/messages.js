@@ -320,7 +320,7 @@ router.post('/:id/images/manual', async (req, res) => {
       ...card,
       current_clothing: session.current_clothing || '',
     }, recentMessages);
-    if (!imageRequest.send || !imageRequest.action) {
+    if (!imageRequest.action) {
       return res.status(400).json({ error: 'Not enough scene detail in the latest exchange to generate an image yet.' });
     }
 

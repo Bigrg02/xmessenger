@@ -3,13 +3,13 @@ const crypto = require('crypto');
 const fs = require('fs');
 const FormData = require('form-data');
 const path = require('path');
-const { readSettings, SHARED_WORKFLOW_PATH } = require('./comfyuiSettings');
+const { readSettings, getEffectiveServerUrl, SHARED_WORKFLOW_PATH } = require('./comfyuiSettings');
 
 const IMAGES_DIR = path.join(__dirname, '../../data/images');
 if (!fs.existsSync(IMAGES_DIR)) fs.mkdirSync(IMAGES_DIR, { recursive: true });
 
 function getComfyUrl() {
-  return (process.env.COMFYUI_BASE_URL || 'http://localhost:8188').replace(/\/$/, '');
+  return getEffectiveServerUrl(readSettings());
 }
 
 function normalizeImageScene(imageRequest = {}) {
@@ -91,6 +91,10 @@ function hasFramingDescriptor(text = '') {
   return /\b(full-body|full body|waist-up|waist up|close-up|close up|medium shot|wide shot|mirror selfie|selfie|portrait shot|shot from behind|camera angled)\b/i.test(text);
 }
 
+function hasExpressionDescriptor(text = '') {
+  return /\b(smiling|playful smile|soft smile|teasing smile|inviting smile|sultry look|flushed|biting her lip|lip bite|grinning|laughing|smirking|smirk|bedroom eyes|half-lidded eyes|looking needy|looking shy|looking confident|breathless|moaning|eyes closed|wide-eyed|blushing|seductive expression)\b/i.test(text);
+}
+
 function prefersRearView(actionText = '', clothingText = '') {
   const combined = `${actionText} ${clothingText}`;
   return /\b(from behind|viewed from behind|over her shoulder|backside|ass|rear|back to the camera|turned away)\b/i.test(combined);
@@ -120,6 +124,10 @@ function buildActionPrompt(actionText = '', clothingText = '') {
 
   if (!hasFramingDescriptor(base)) {
     parts.push(prefersRearView(base, clothingText) ? 'full-body shot from behind' : 'full-body photo');
+  }
+
+  if (!hasExpressionDescriptor(base)) {
+    parts.push(prefersRearView(base, clothingText) ? 'looking back with a playful, inviting smile' : 'with a playful, inviting smile');
   }
 
   return parts.join(', ');

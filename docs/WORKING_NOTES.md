@@ -10,7 +10,7 @@ This document is the local onboarding/reference guide for active development in 
 - Session and message persistence in SQLite
 - LLM responses from OpenRouter
 - Optional side effects from Lovense, ComfyUI, and Whisper
-- A built-in admin/settings flow for managing characters
+- A built-in admin/settings flow for managing characters and the image system
 
 ## Stack Snapshot
 
@@ -61,7 +61,7 @@ Current tables:
 
 Key details:
 
-- Sessions track `character_name`, `phase`, timestamps, and an optional summary.
+- Sessions track `character_name`, `phase`, timestamps, an optional summary, and current outfit continuity.
 - Messages store `role`, `content`, and optional JSON `metadata`.
 - Assistant side effects are reconstructed largely from `metadata`.
 
@@ -85,6 +85,8 @@ Key details:
 - Handles immediate voice intent routing in device phase
 - Persists user and assistant messages
 - Broadcasts typing, message, image, audio, phase, and error SSE events
+- Runs manual scene-image generation
+- Handles image regenerate-in-place flows
 
 ### `src/routes/admin.js`
 
@@ -93,6 +95,9 @@ Key details:
 - Uploads portrait and full-body reference images
 - Pulls a live model catalog from OpenRouter
 - Runs one-off model test prompts
+- Manages the in-app ComfyUI image-system setup surface
+- Uploads/replaces the shared workflow JSON
+- Runs dry validation of server, workflow, bindings, and character reference readiness
 
 ### `src/modules/llmClient.js`
 
@@ -103,6 +108,7 @@ Key details:
 - Derives per-turn tone routing such as reply/image/control modes
 - Keeps `core_desires` in the always-on relationship layer
 - Uses `turn_ons` / `kinks` more as recurring motifs during warm or explicit scenes
+- Builds manual image prompts from recent chat context
 
 ### `src/modules/deviceManager.js`
 
@@ -115,17 +121,20 @@ Key details:
 ### `src/modules/imageGenerator.js`
 
 - Loads the shared ComfyUI API workflow from `workflows/comfyui/workflow.json`
-- Injects prompt text into configured titled `CLIPTextEncode` nodes
-- Uploads the selected character reference image into the configured titled image node
+- Injects prompt text into configured `CLIPTextEncode` nodes
+- Uploads the selected character reference image into the configured image node
 - Randomizes configured or auto-detected seed-bearing nodes on every image run
 - Submits jobs to ComfyUI and polls history
 - Downloads the first generated image into `data/images/`
+- Normalizes clothing/action phrasing for cleaner Flux-style generations
+- Adds fallback pose, facing, framing, and expression details when the model underspecifies them
 
 ### `src/modules/comfyuiSettings.js`
 
-- Stores shared workflow binding preferences in `data/comfyui-settings.json`
-- Normalizes prompt-node, reference-image-node, and seed-node ID lists
-- Lists titled nodes from the shared workflow so the settings UI can expose them
+- Stores app-managed image-system settings in `data/comfyui-settings.json`
+- Normalizes active ComfyUI server URL plus prompt-node, reference-image-node, and seed-node ID lists
+- Tracks the last dry-validation result
+- Lists workflow nodes and workflow metadata for the settings UI
 
 ## Frontend Responsibilities
 
@@ -141,6 +150,8 @@ Key details:
 - Sends user text messages
 - Enters device mode UI state
 - Owns the Lovense QR pairing panel and app-state polling
+- Owns manual scene-image generation from both the `Scene` button and avatar/header tap
+- Shows the small header spinner while manual photo generation is in flight
 
 ### `public/js/ptt.js`
 
@@ -153,7 +164,10 @@ Key details:
 - Drives the settings screens
 - Fetches model options from `/api/admin/models`
 - Creates, updates, tests, and deletes characters
-- Loads and saves the shared ComfyUI workflow binding settings
+- Loads and saves the full in-app image-system settings
+- Uploads/downloads the shared workflow JSON
+- Renders workflow node quick-pick actions
+- Runs dry image-system validation against the active ComfyUI server
 
 ## Character Contract
 
@@ -229,6 +243,12 @@ Test candidate OpenRouter models:
 node scripts/test-models.js --models "openai/gpt-4o,openai/gpt-4o-mini"
 ```
 
+Run the automated test suite:
+
+```powershell
+npm test
+```
+
 ## Environment
 
 Defined in `.env.example`:
@@ -240,7 +260,11 @@ Defined in `.env.example`:
 - `WHISPER_API_URL`
 - `PORT`
 
-The app degrades when external services are missing, but chat quality depends on OpenRouter and some flows only appear during device phase.
+Notes:
+
+- The active ComfyUI server URL is now app-managed first and can target any reachable LAN server.
+- `COMFYUI_BASE_URL` is now a fallback only when no saved in-app image server URL exists.
+- The app degrades when external services are missing, but chat quality depends on OpenRouter and some flows only appear during device phase.
 
 ## Current Lovense State
 
@@ -253,11 +277,11 @@ The app degrades when external services are missing, but chat quality depends on
 
 ## Current Working Assumptions
 
-- The repo currently has no automated test suite or lint script.
-- The app is integration-heavy, so most validation will be manual unless we add tests.
+- The repo has an automated Node test suite via `npm test`, but no dedicated lint script.
+- The app is integration-heavy, so some validation will still be manual even with tests.
 - `characters/sara/card.json` currently has an uncommitted user edit and should be treated carefully.
 - `data/` contains runtime state and should not be treated as source-of-truth code.
-- ComfyUI is now intended to use a single shared workflow file rather than per-character workflow JSON.
+- ComfyUI is intended to use a single shared workflow file rather than per-character workflow JSON.
 
 ## Known Sharp Edges
 
@@ -270,9 +294,11 @@ The app degrades when external services are missing, but chat quality depends on
 - Frontend and backend both assume character folder names line up with lowercased character names.
 - The toy sheet can be fully linked and show live toy state while still saying setup-only if the current session has not entered device mode.
 - Lovense preset/downloaded pattern-library integration is not implemented yet; current control is structured action based (`set_level`, `ramp`, `pulse`, `hold`, `cooldown`, `stop`, `focus`, `alternate`).
-- The shared ComfyUI workflow is still a template until you replace [workflows/comfyui/workflow.json](/C:/dev/Xmessenger/workflows/comfyui/workflow.json) with your actual exported workflow.
+- The shared ComfyUI workflow is still a template until you replace [workflows/comfyui/workflow.json](/C:/dev/Xmessenger/workflows/comfyui/workflow.json) with your actual exported workflow, but upload/replacement can now be done entirely from the app.
 - Shared ComfyUI bindings are now primarily node-ID based. If prompt or reference injection stops working after a workflow export, check the node IDs shown in Settings before changing code.
-- Flux-style image models still need clean, non-ambiguous clothing language. The image generator now rewrites “peek” or layered half-visible underwear states into either clearly hidden or clearly exposed phrasing before generation.
+- The image setup screen now includes a dry validation panel. It checks server reachability, workflow presence, node binding resolution, character reference images, and prompt assembly without requiring a real render.
+- Flux-style image models still need clean, non-ambiguous clothing language. The image generator now rewrites "peek" or layered half-visible underwear states into either clearly hidden or clearly exposed phrasing before generation.
+- Image action prompts now require pose, facing direction, framing, and facial expression. The backend adds a fallback expression if the model leaves the face emotionally blank.
 
 ## Good First Places To Change Code
 

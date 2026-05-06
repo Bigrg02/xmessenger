@@ -43,6 +43,10 @@
           <span class="online-dot" id="online-dot"></span>
         </div>
         <div class="chat-header-name" id="chat-header-name"></div>
+        <div id="chat-image-status" class="chat-image-status hidden" aria-live="polite">
+          <span class="chat-image-spinner" aria-hidden="true"></span>
+          <span>Generating photo...</span>
+        </div>
       </div>
       <div class="chat-header-right">
         <button class="icon-btn restart-btn" id="btn-restart-chat" aria-label="Restart Chat" title="Restart Chat">
@@ -190,10 +194,27 @@
       <div class="settings-section-label">CHARACTERS</div>
       <div id="settings-char-list" class="settings-char-list"></div>
 
-      <div class="settings-section-label">COMFYUI WORKFLOW</div>
+      <div class="settings-section-label">IMAGE SYSTEM</div>
       <div class="settings-card">
         <div class="settings-card-copy">
-          Point xMessage at the exact ComfyUI node IDs that should receive the assembled prompt and the uploaded character reference image.
+          Configure the active ComfyUI server, replace the shared workflow, bind prompt/reference/seed nodes, and dry-test the whole image pipeline without leaving the app.
+        </div>
+
+        <div class="form-group settings-card-group">
+          <label class="form-label" for="comfy-server-url">Active Image Server URL</label>
+          <input type="text" id="comfy-server-url" class="form-input" placeholder="http://192.168.1.50:8188">
+          <div class="form-hint">Any reachable LAN or local ComfyUI server is supported as long as the xMessage backend can connect to it.</div>
+          <div id="comfy-server-status" class="workflow-status-card">Loading image server status...</div>
+        </div>
+
+        <div class="form-group settings-card-group">
+          <label class="form-label">Workflow Status</label>
+          <div id="comfy-workflow-status" class="workflow-status-card">Loading workflow status...</div>
+          <div class="settings-card-actions">
+            <button type="button" id="btn-comfyui-download" class="run-test-btn secondary-action-btn settings-inline-btn">Download Workflow</button>
+            <button type="button" id="btn-comfyui-upload" class="run-test-btn secondary-action-btn settings-inline-btn">Upload Workflow</button>
+          </div>
+          <input type="file" id="comfy-workflow-upload" accept=".json,application/json" class="hidden">
         </div>
 
         <div class="form-group settings-card-group">
@@ -217,12 +238,45 @@
         <div class="form-group settings-card-group">
           <label class="form-label">Available Workflow Nodes</label>
           <div id="comfy-workflow-nodes" class="workflow-node-list">Loading workflow nodes...</div>
-          <div class="form-hint">These come from <code>workflows/comfyui/workflow.json</code>. Rename nodes in ComfyUI if you want cleaner titles to target here.</div>
+          <div class="form-hint">Use the quick-pick buttons to add node IDs directly from the current workflow.</div>
+        </div>
+
+        <div class="form-group settings-card-group">
+          <label class="form-label">Test Image Setup</label>
+          <div class="workflow-test-grid">
+            <div class="workflow-test-field">
+              <label class="form-label" for="comfy-test-character">Character</label>
+              <select id="comfy-test-character" class="form-select">
+                <option value="">Select a character</option>
+              </select>
+            </div>
+            <div class="workflow-test-field">
+              <label class="form-label" for="comfy-test-clothing">Sample Clothing</label>
+              <input type="text" id="comfy-test-clothing" class="form-input" placeholder="black lace bra and emerald thong">
+            </div>
+            <div class="workflow-test-field">
+              <label class="form-label" for="comfy-test-location">Sample Location</label>
+              <input type="text" id="comfy-test-location" class="form-input" placeholder="leaning against the bedroom mirror">
+            </div>
+            <div class="workflow-test-field workflow-test-field-wide">
+              <label class="form-label" for="comfy-test-action">Sample Action</label>
+              <textarea id="comfy-test-action" class="form-textarea" rows="3" placeholder="She is standing, facing the camera, waist-up mirror selfie with one hand on her hip"></textarea>
+            </div>
+          </div>
+          <div class="settings-card-actions">
+            <button type="button" id="btn-comfyui-validate" class="run-test-btn settings-inline-btn">Run Dry Validation</button>
+          </div>
+          <div id="comfy-validation-summary" class="workflow-validation-summary">No validation run yet.</div>
+          <div id="comfy-validation-results" class="workflow-validation-results"></div>
+          <div class="form-group settings-card-group workflow-preview-group">
+            <label class="form-label" for="comfy-validation-prompt-preview">Sample Prompt Preview</label>
+            <textarea id="comfy-validation-prompt-preview" class="form-textarea prompt-output" rows="10" readonly></textarea>
+          </div>
         </div>
 
         <div class="settings-card-actions">
           <button type="button" id="btn-comfyui-refresh" class="run-test-btn secondary-action-btn settings-inline-btn">Refresh Nodes</button>
-          <button type="button" id="btn-comfyui-save" class="run-test-btn settings-inline-btn">Save Workflow Bindings</button>
+          <button type="button" id="btn-comfyui-save" class="run-test-btn settings-inline-btn">Save Image Settings</button>
         </div>
       </div>
     </div>

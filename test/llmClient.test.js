@@ -257,14 +257,14 @@ test('buildImagePrompt uses a position-aware fallback action', () => {
 test('buildActionPrompt adds facing direction and framing when the action is too vague', () => {
   assert.equal(
     buildActionPrompt('She is standing with one hand on her hip', 'black lace bra and emerald thong'),
-    'She is standing with one hand on her hip, facing the camera, full-body photo'
+    'She is standing with one hand on her hip, facing the camera, full-body photo, with a playful, inviting smile'
   );
 });
 
 test('buildActionPrompt prefers a rear view when the scene already implies behind framing', () => {
   assert.equal(
     buildActionPrompt('She is looking over her shoulder', 'black thong'),
-    'She is looking over her shoulder, standing naturally, full-body shot from behind'
+    'She is looking over her shoulder, standing naturally, full-body shot from behind, looking back with a playful, inviting smile'
   );
 });
 

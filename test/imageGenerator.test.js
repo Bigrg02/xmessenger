@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 
-const { normalizeSettings } = require('../src/modules/comfyuiSettings');
+const { normalizeSettings, normalizeServerUrl, getEffectiveServerUrl } = require('../src/modules/comfyuiSettings');
 const { selectReferenceImage, injectWorkflowBindings, buildImagePrompt, buildClothingPrompt, buildActionPrompt } = require('../src/modules/imageGenerator');
 
 const charactersDir = path.join(__dirname, '../characters');
@@ -18,8 +18,9 @@ function makeCard(overrides = {}) {
   };
 }
 
-test('normalizeSettings splits comma-separated workflow titles', () => {
+test('normalizeSettings keeps image server settings and normalizes node lists', () => {
   const settings = normalizeSettings({
+    server_url: 'http://192.168.1.50:8188/',
     prompt_node_ids: '12, 14',
     reference_image_node_ids: '27',
     seed_node_ids: '125, 126',
@@ -27,11 +28,38 @@ test('normalizeSettings splits comma-separated workflow titles', () => {
     reference_image_node_titles: 'Reference Image, Pose Input',
   });
 
+  assert.equal(settings.server_url, 'http://192.168.1.50:8188');
   assert.deepEqual(settings.prompt_node_ids, ['12', '14']);
   assert.deepEqual(settings.reference_image_node_ids, ['27']);
   assert.deepEqual(settings.seed_node_ids, ['125', '126']);
   assert.deepEqual(settings.prompt_node_titles, ['Positive Prompt', 'Second Prompt']);
   assert.deepEqual(settings.reference_image_node_titles, ['Reference Image', 'Pose Input']);
+});
+
+test('normalizeServerUrl rejects invalid protocols and trims trailing slash', () => {
+  assert.equal(normalizeServerUrl('https://10.0.0.12:8188/'), 'https://10.0.0.12:8188');
+  assert.throws(() => normalizeServerUrl('ftp://10.0.0.12:8188'), /http/);
+});
+
+test('getEffectiveServerUrl prefers saved settings over env fallback', () => {
+  const originalEnv = process.env.COMFYUI_BASE_URL;
+  process.env.COMFYUI_BASE_URL = 'http://127.0.0.1:8188';
+
+  assert.equal(
+    getEffectiveServerUrl({ server_url: 'http://192.168.1.88:8188' }),
+    'http://192.168.1.88:8188'
+  );
+
+  assert.equal(
+    getEffectiveServerUrl({ server_url: '' }),
+    'http://127.0.0.1:8188'
+  );
+
+  if (typeof originalEnv === 'undefined') {
+    delete process.env.COMFYUI_BASE_URL;
+  } else {
+    process.env.COMFYUI_BASE_URL = originalEnv;
+  }
 });
 
 test('selectReferenceImage prefers full-body reference and falls back to portrait', async (t) => {
@@ -235,7 +263,7 @@ test('buildClothingPrompt removes peek language so underwear is either shown or 
 test('buildActionPrompt removes partial reveal phrasing from the action', () => {
   assert.equal(
     buildActionPrompt('She is standing with her skirt lifted a little and her thong peeking out', 'black thong'),
-    'She is standing with her skirt lifted a little and her thong visible, facing the camera, full-body photo'
+    'She is standing with her skirt lifted a little and her thong visible, facing the camera, full-body photo, with a playful, inviting smile'
   );
 });
 
@@ -243,5 +271,12 @@ test('buildClothingPrompt rewrites layered underwear visibility into a clean exp
   assert.equal(
     buildClothingPrompt('tiny gray running shorts that ride up my ass with black thong visible'),
     'tiny gray running shorts pulled down enough to fully expose the black thong'
+  );
+});
+
+test('buildActionPrompt adds an expression when the action is otherwise blank-faced', () => {
+  assert.equal(
+    buildActionPrompt('She is standing with one hand on her hip, facing the camera, full-body photo', 'black lace bra and emerald thong'),
+    'She is standing with one hand on her hip, facing the camera, full-body photo, with a playful, inviting smile'
   );
 });
